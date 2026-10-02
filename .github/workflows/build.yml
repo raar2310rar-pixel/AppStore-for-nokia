@@ -23,6 +23,12 @@ jobs:
           mkdir -p bin dist src
           find . -maxdepth 2 -name "*.java" -exec cp {} src/ \;
 
+      - name: Автоматическая очистка кода от Markdown-символов
+        run: |
+          # Удаляем символы ``` и мусорные кавычки в конце файлов
+          sed -i 's/```//g' src/*.java
+          sed -i 's/`//g' src/*.java
+
       - name: Компиляция Java (MIDP 2.1)
         run: |
           javac -source 1.7 -target 1.7 -d bin src/*.java
