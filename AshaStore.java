@@ -23,6 +23,10 @@ public class AshaStore extends MIDlet implements CommandListener {
     private Command searchCommand;
     private Command backCommand;
     private Command exitCommand;
+    
+    private List resultsList;
+    private Form detailsForm;
+    private Command detailsBackCommand;
 
     private static final String SITE = "https://series40.kiev.ua/";
 
@@ -39,6 +43,10 @@ public class AshaStore extends MIDlet implements CommandListener {
         main.setCommandListener(this);
 
         exitCommand = new Command("Выход", Command.EXIT, 1);
+        backCommand = new Command("Назад", Command.BACK, 1);
+        detailsBackCommand = new Command("Назад", Command.BACK, 1);
+        searchCommand = new Command("Искать", Command.OK, 1);
+
         main.addCommand(exitCommand);
     }
 
@@ -64,12 +72,9 @@ public class AshaStore extends MIDlet implements CommandListener {
 
             if (n == 3) {
                 showSearch();
-            } else if (n == 4) {
-                loadPage(SITE);
             } else {
                 loadPage(SITE);
             }
-
             return;
         }
 
@@ -91,13 +96,21 @@ public class AshaStore extends MIDlet implements CommandListener {
             return;
         }
 
-        if (c == backCommand) {
+        if (d == resultsList && c == List.SELECT_COMMAND) {
+            int n = resultsList.getSelectedIndex();
+            if (n >= 0 && n < resultsList.size()) {
+                String name = resultsList.getString(n);
+                showDetails(name);
+            }
+            return;
+        }
+
+        if (c == backCommand || c == detailsBackCommand) {
             display.setCurrent(main);
         }
     }
 
     private void showSearch() {
-
         searchForm = new Form("Поиск");
 
         searchText = new TextField(
@@ -108,19 +121,6 @@ public class AshaStore extends MIDlet implements CommandListener {
         );
 
         searchForm.append(searchText);
-
-        searchCommand = new Command(
-                "Искать",
-                Command.OK,
-                1
-        );
-
-        backCommand = new Command(
-                "Назад",
-                Command.BACK,
-                2
-        );
-
         searchForm.addCommand(searchCommand);
         searchForm.addCommand(backCommand);
         searchForm.setCommandListener(this);
@@ -129,7 +129,6 @@ public class AshaStore extends MIDlet implements CommandListener {
     }
 
     private void loadPage(final String url) {
-
         final Form wait = new Form("Asha Store");
         wait.append("Подключение к интернету...\n\n");
         wait.append(url);
@@ -138,9 +137,7 @@ public class AshaStore extends MIDlet implements CommandListener {
 
         new Thread(new Runnable() {
             public void run() {
-
                 try {
-
                     String html = downloadText(url);
 
                     if (html == null || html.length() == 0) {
@@ -158,12 +155,10 @@ public class AshaStore extends MIDlet implements CommandListener {
     }
 
     private String downloadText(String url) throws Exception {
-
         HttpConnection con = null;
         InputStream in = null;
 
         try {
-
             con = (HttpConnection) Connector.open(
                     url,
                     Connector.READ,
@@ -171,7 +166,6 @@ public class AshaStore extends MIDlet implements CommandListener {
             );
 
             con.setRequestMethod(HttpConnection.GET);
-
             con.setRequestProperty(
                     "User-Agent",
                     "Mozilla/5.0 Nokia Asha"
@@ -184,9 +178,7 @@ public class AshaStore extends MIDlet implements CommandListener {
             }
 
             in = con.openInputStream();
-
-            ByteArrayOutputStream out =
-                    new ByteArrayOutputStream();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
 
             byte[] buffer = new byte[512];
             int count;
@@ -195,13 +187,9 @@ public class AshaStore extends MIDlet implements CommandListener {
                 out.write(buffer, 0, count);
             }
 
-            return new String(
-                    out.toByteArray(),
-                    "UTF-8"
-            );
+            return new String(out.toByteArray(), "UTF-8");
 
         } finally {
-
             if (in != null) {
                 try {
                     in.close();
@@ -219,86 +207,66 @@ public class AshaStore extends MIDlet implements CommandListener {
     }
 
     private void showResults(String html) {
-
-        List result = new List(
-                "Asha Store",
-                List.IMPLICIT
-        );
-
+        resultsList = new List("Asha Store", List.IMPLICIT);
         Vector names = new Vector();
 
         int pos = 0;
 
         while (true) {
-
             int a = html.indexOf("<a", pos);
-
-            if (a == -1) {
-                break;
-            }
+            if (a == -1) break;
 
             int b = html.indexOf(">", a);
-
-            if (b == -1) {
-                break;
-            }
+            if (b == -1) break;
 
             int e = html.indexOf("</a>", b);
-
-            if (e == -1) {
-                break;
-            }
+            if (e == -1) break;
 
             String text = html.substring(b + 1, e);
             text = stripTags(text);
             text = decode(text);
             text = text.trim();
 
-            if (text.length() > 2 &&
-                text.length() < 70) {
-
+            if (text.length() > 2 && text.length() < 70) {
                 if (names.indexOf(text) == -1) {
                     names.addElement(text);
-                    result.append(text, null);
+                    resultsList.append(text, null);
                 }
             }
 
             pos = e + 4;
 
-            if (names.size() >= 30) {
-                break;
-            }
+            if (names.size() >= 30) break;
         }
 
-        if (result.size() == 0) {
-            result.append(
-                    "Ничего не найдено",
-                    null
-            );
+        if (resultsList.size() == 0) {
+            resultsList.append("Ничего не найдено", null);
         }
 
-        result.setCommandListener(
-                new ResultListener(this, html)
-        );
+        resultsList.setCommandListener(this);
+        resultsList.addCommand(backCommand);
 
-        Command back = new Command(
-                "Назад",
-                Command.BACK,
-                1
-        );
+        display.setCurrent(resultsList);
+    }
 
-        result.addCommand(back);
+    private void showDetails(String name) {
+        detailsForm = new Form(name);
 
-        display.setCurrent(result);
+        detailsForm.append("Название:\n" + name + "\n\n");
+        detailsForm.append("Источник:\nseries40.kiev.ua\n\n");
+        detailsForm.append("Страница получена через интернет.");
+
+        detailsForm.addCommand(detailsBackCommand);
+        detailsForm.setCommandListener(this);
+
+        display.setCurrent(detailsForm);
     }
 
     private String stripTags(String s) {
-
         StringBuffer r = new StringBuffer();
         boolean tag = false;
 
         for (int i = 0; i < s.length(); i++) {
-
             char c = s.charAt(i);
 
             if (c == '<') {
@@ -314,7 +282,6 @@ public class AshaStore extends MIDlet implements CommandListener {
     }
 
     private String decode(String s) {
-
         s = replaceAll(s, "&", " ");
         s = replaceAll(s, "nbsp;", " ");
         s = replaceAll(s, "quot;", "\"");
@@ -344,33 +311,23 @@ public class AshaStore extends MIDlet implements CommandListener {
     }
 
     private String encode(String s) {
-
         StringBuffer r = new StringBuffer();
 
         for (int i = 0; i < s.length(); i++) {
-
             char c = s.charAt(i);
 
             if ((c >= 'a' && c <= 'z') ||
                 (c >= 'A' && c <= 'Z') ||
                 (c >= '0' && c <= '9')) {
-
                 r.append(c);
-
             } else if (c == ' ') {
-
                 r.append('+');
-
             } else {
-
                 r.append('%');
-
                 String h = Integer.toHexString(c);
-
                 if (h.length() < 2) {
                     r.append('0');
                 }
-
                 r.append(h);
             }
         }
@@ -379,7 +336,6 @@ public class AshaStore extends MIDlet implements CommandListener {
     }
 
     private void showOffline() {
-
         Alert a = new Alert(
                 "Нет подключения",
                 "Извините, мы не можем работать.\n" +
@@ -390,48 +346,6 @@ public class AshaStore extends MIDlet implements CommandListener {
         );
 
         a.setTimeout(Alert.FOREVER);
-
         display.setCurrent(a, main);
-    }
-
-    private class ResultListener implements CommandListener {
-
-        private AshaStore store;
-        private String html;
-
-        ResultListener(AshaStore store, String html) {
-            this.store = store;
-            this.html = html;
-        }
-
-        public void commandAction(Command c, Displayable d) {
-
-            if (c == List.SELECT_COMMAND) {
-
-                List l = (List) d;
-                int n = l.getSelectedIndex();
-
-                if (n < 0 || n >= l.size()) {
-                    return;
-                }
-
-                String name = l.getString(n);
-
-                Form f = new Form(name);
-
-                f.append("Название:\n" + name + "\n\n");
-                f.append("Источник:\nseries40.kiev.ua\n\n");
-                f.append("Страница получена через интернет.");
-
-                Command back = new Command("Назад", Command.BACK, 1);
-                f.addCommand(back);
-                f.setCommandListener(store);
-
-                store.display.setCurrent(f);
-
-            } else {
-                store.display.setCurrent(store.main);
-            }
-        }
     }
 }
