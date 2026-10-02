@@ -20,18 +20,20 @@ jobs:
 
       - name: Подготовить папки
         run: |
-          mkdir -p bin dist src
-          find . -maxdepth 2 -name "*.java" -exec cp {} src/ \;
+          mkdir -p bin dist
+          rm -rf src
+          mkdir -p src
+          find . -maxdepth 2 -name "AshaStore.java" -exec cp {} src/ \;
 
       - name: Глубокая очистка Java-кода
         run: |
-          # Удаляем спецсимволы разметки, обратные кавычки и артефакты Markdown
+          # Удаляем Markdown-разметку и кавычки
           sed -i 's/```java//gI' src/*.java
           sed -i 's/```//g' src/*.java
           sed -i 's/`//g' src/*.java
-          # Удаляем неразрывные пробелы (ASCII 160 / \u00A0), которые ломают javac
+          # Удаляем скрытые неразрывные пробелы (ASCII 160)
           sed -i 's/\xA0/ /g' src/*.java
-          # Удаляем отдельные строки, состоящие только из слова java
+          # Удаляем случайные одиночные строки со словом java
           sed -i '/^[[:space:]]*java[[:space:]]*$/d' src/*.java
 
       - name: Компиляция Java (MIDP 2.1)
