@@ -1,0 +1,37 @@
+```yaml
+name: Build AshaStore
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Получить исходники
+        uses: actions/checkout@v6
+
+      - name: Скачать J2ME DevKit
+        run: |
+          git clone https://github.com/retro-systems-lab/j2me-devkit.git devkit
+
+      - name: Собрать AshaStore
+        run: |
+          cd devkit
+          cp ../AshaStore.java src/MainMIDlet.java
+          make setup
+          make build
+
+      - name: Переименовать JAR
+        run: |
+          mkdir -p result
+          cp devkit/dist/app.jar result/AshaStore.jar
+
+      - name: Загрузить AshaStore.jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: AshaStore
+          path: result/AshaStore.jar
+```
