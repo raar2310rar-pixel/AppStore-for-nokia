@@ -18,19 +18,11 @@ jobs:
           distribution: temurin
           java-version: '8'
 
-      - name: Скачать J2ME API (MIDP 2.0 / CLDC 1.1)
+      - name: Скачать J2ME API
         run: |
           mkdir -p lib
-          # Качаем библиотеки с обработкой возможных сбоев сети
-          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar || \
-          curl -fsSL -A "Mozilla/5.0" "https://jcenter.bintray.com/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar
-          
-          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar || \
-          curl -fsSL -A "Mozilla/5.0" "https://jcenter.bintray.com/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar
-
-          # Проверка целостности архивов
-          unzip -t lib/midpapi20.jar > /dev/null
-          unzip -t lib/cldcapi11.jar > /dev/null
+          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar
+          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar
 
       - name: Подготовить структуру
         run: |
@@ -49,22 +41,12 @@ jobs:
         run: |
           javac -source 1.7 -target 1.7 -cp "lib/midpapi20.jar:lib/cldcapi11.jar" -d bin src/*.java
 
-      - name: Создать манифест
+      - name: Создать манифест и упаковать JAR
         run: |
           mkdir -p bin/META-INF
-          {
-            echo "Manifest-Version: 1.0"
-            echo "MIDlet-1: Asha Store,,AshaStore"
-            echo "MIDlet-Name: Asha Store"
-            echo "MIDlet-Vendor: Asha Store"
-            echo "MIDlet-Version: 1.0.0"
-            echo "MicroEdition-Configuration: CLDC-1.1"
-            echo "MicroEdition-Profile: MIDP-2.1"
-          } > bin/META-INF/MANIFEST.MF
-
-      - name: Упаковать в JAR
-        run: |
+          printf "Manifest-Version: 1.0\nMIDlet-1: Asha Store,,AshaStore\nMIDlet-Name: Asha Store\nMIDlet-Vendor: Asha Store\nMIDlet-Version: 1.0.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.1\n" > bin/META-INF/MANIFEST.MF
           jar cfm dist/AshaStore.jar bin/META-INF/MANIFEST.MF -C bin .
+          ls -la dist/
 
       - name: Загрузить AshaStore.jar
         uses: actions/upload-artifact@v4
