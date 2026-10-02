@@ -1,16 +1,23 @@
+```yaml
 name: Build AshaStore
 
 on:
-  workflow_dispatch:
   push:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Скачать проект
+      - name: Получить исходники
         uses: actions/checkout@v4
+
+      - name: Установить Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Скачать J2ME DevKit
         run: |
@@ -21,23 +28,24 @@ jobs:
         run: |
           make setup
 
-      - name: Положить AshaStore.java в проект
+      - name: Положить исходник
         run: |
+          mkdir -p devkit/src
           cp AshaStore.java devkit/src/AshaStore.java
 
-      - name: Настроить MIDlet
+      - name: Настроить JAD
         working-directory: devkit
         run: |
-          sed -i 's/MIDlet-Name: Demo/MIDlet-Name: Asha Store/' app.jad
-          sed -i 's/MIDlet-Vendor: Example/MIDlet-Vendor: Asha Store/' app.jad
-          sed -i 's/MIDlet-1: Demo,,MainMIDlet/MIDlet-1: Asha Store,,AshaStore/' app.jad
+          sed -i 's/^MIDlet-Name:.*/MIDlet-Name: Asha Store/' app.jad
+          sed -i 's/^MIDlet-Vendor:.*/MIDlet-Vendor: Asha Store/' app.jad
+          sed -i 's/^MIDlet-1:.*/MIDlet-1: Asha Store,,AshaStore/' app.jad
 
       - name: Собрать JAR
         working-directory: devkit
         run: |
           make build
 
-      - name: Переименовать JAR
+      - name: Подготовить результат
         run: |
           mkdir -p result
           cp devkit/dist/app.jar result/AshaStore.jar
@@ -47,3 +55,4 @@ jobs:
         with:
           name: AshaStore
           path: result/AshaStore.jar
+```
