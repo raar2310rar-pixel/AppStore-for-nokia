@@ -18,38 +18,29 @@ jobs:
           distribution: temurin
           java-version: '8'
 
-      - name: Установить Ant
+      - name: Подготовить папки
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ant wget
-
-      - name: Показать структуру файлов (для отладки)
-        run: |
-          echo "=== Поиск java-файлов ==="
-          find . -name "*.java"
-
-      - name: Подготовить структуру проекта
-        run: |
-          mkdir -p src bin dist
+          mkdir -p bin dist src
           find . -maxdepth 2 -name "*.java" -exec cp {} src/ \;
 
-      - name: Скомпилировать Java ME (MIDP 2.1)
+      - name: Компиляция Java (MIDP 2.1)
         run: |
-          javac -source 1.3 -target 1.3 -bootclasspath /usr/lib/jvm/java-8-temurin/jre/lib/rt.jar -d bin src/*.java || \
           javac -source 1.7 -target 1.7 -d bin src/*.java
 
-      - name: Создать MANIFEST.MF
+      - name: Создание манифеста
         run: |
           mkdir -p bin/META-INF
-          echo "Manifest-Version: 1.0" > bin/META-INF/MANIFEST.MF
-          echo "MIDlet-1: AshaStore,, AshaStore" >> bin/META-INF/MANIFEST.MF
-          echo "MIDlet-Name: Asha Store" >> bin/META-INF/MANIFEST.MF
-          echo "MIDlet-Vendor: AshaStore" >> bin/META-INF/MANIFEST.MF
-          echo "MIDlet-Version: 1.0.0" >> bin/META-INF/MANIFEST.MF
-          echo "MicroEdition-Configuration: CLDC-1.1" >> bin/META-INF/MANIFEST.MF
-          echo "MicroEdition-Profile: MIDP-2.1" >> bin/META-INF/MANIFEST.MF
+          {
+            echo "Manifest-Version: 1.0"
+            echo "MIDlet-1: Asha Store,,AshaStore"
+            echo "MIDlet-Name: Asha Store"
+            echo "MIDlet-Vendor: Asha Store"
+            echo "MIDlet-Version: 1.0.0"
+            echo "MicroEdition-Configuration: CLDC-1.1"
+            echo "MicroEdition-Profile: MIDP-2.1"
+          } > bin/META-INF/MANIFEST.MF
 
-      - name: Запаковать JAR
+      - name: Упаковка в JAR
         run: |
           jar cfm dist/AshaStore.jar bin/META-INF/MANIFEST.MF -C bin .
 
