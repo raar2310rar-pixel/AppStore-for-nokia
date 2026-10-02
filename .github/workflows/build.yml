@@ -18,22 +18,22 @@ jobs:
           distribution: temurin
           java-version: '8'
 
-      - name: Скачать валидный J2ME API (MIDP 2.0 / CLDC 1.1)
+      - name: Скачать J2ME API (MIDP 2.0 / CLDC 1.1)
         run: |
           mkdir -p lib
-          # Используем прямой надежный источник cldc/midp stubs из Maven Central
-          curl -fL "https://repo1.maven.org/maven2/org/microedition/midpapi20/2.0/midpapi20-2.0.jar" -o lib/midpapi20.jar
+          curl -sL "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar
+          curl -sL "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar
           
-          # Проверяем, что скачанный файл действительно является ZIP/JAR архивом
-          unzip -t lib/midpapi20.jar || (echo "Скачанный файл поврежден!" && exit 1)
+          # Проверяем целостность скачанных JAR-файлов
+          unzip -t lib/midpapi20.jar > /dev/null
+          unzip -t lib/cldcapi11.jar > /dev/null
 
-      - name: Подготовить структуру директорий
+      - name: Подготовить структуру
         run: |
           mkdir -p bin dist src
-          # Копируем AshaStore.java в папку src/
           find . -maxdepth 2 -name "AshaStore.java" -exec cp {} src/ \;
 
-      - name: Очистка файла кода от артефактов
+      - name: Очистить код от разметки
         run: |
           sed -i 's/```java//gI' src/*.java
           sed -i 's/```//g' src/*.java
@@ -43,9 +43,9 @@ jobs:
 
       - name: Компиляция Java (MIDP 2.1)
         run: |
-          javac -source 1.7 -target 1.7 -cp lib/midpapi20.jar -d bin src/*.java
+          javac -source 1.7 -target 1.7 -cp "lib/midpapi20.jar:lib/cldcapi11.jar" -d bin src/*.java
 
-      - name: Создание манифеста
+      - name: Создать манифест
         run: |
           mkdir -p bin/META-INF
           {
@@ -58,7 +58,7 @@ jobs:
             echo "MicroEdition-Profile: MIDP-2.1"
           } > bin/META-INF/MANIFEST.MF
 
-      - name: Упаковка в JAR
+      - name: Упаковать в JAR
         run: |
           jar cfm dist/AshaStore.jar bin/META-INF/MANIFEST.MF -C bin .
 
