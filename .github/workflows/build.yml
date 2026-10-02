@@ -18,10 +18,11 @@ jobs:
           distribution: temurin
           java-version: '8'
 
-      - name: Скачать J2ME (MIDP/CLDC) библиотеку
+      - name: Скачать J2ME API (cldc & midp)
         run: |
           mkdir -p lib
-          curl -sL "https://github.com/microedition/midp-api/raw/master/midpapi21.jar" -o lib/midpapi21.jar
+          # Используем флаги -L для правильной обработки редиректов GitHub
+          curl -sL "https://repo1.maven.org/maven2/org/microedition/midpapi20/2.0/midpapi20-2.0.jar" -o lib/midpapi.jar
 
       - name: Подготовить папки
         run: |
@@ -38,9 +39,9 @@ jobs:
           sed -i 's/\xA0/ /g' src/*.java
           sed -i '/^[[:space:]]*java[[:space:]]*$/d' src/*.java
 
-      - name: Компиляция Java (с MIDP 2.1 API)
+      - name: Компиляция Java (MIDP 2.1)
         run: |
-          javac -source 1.7 -target 1.7 -bootclasspath lib/midpapi21.jar -d bin src/*.java
+          javac -source 1.7 -target 1.7 -cp lib/midpapi.jar -d bin src/*.java
 
       - name: Создание манифеста
         run: |
