@@ -1,8 +1,17 @@
-```java
 import javax.microedition.midlet.MIDlet;
-import javax.microedition.lcdui.*;
-import javax.microedition.io.*;
-import java.io.*;
+import javax.microedition.lcdui.Display;
+import javax.microedition.lcdui.Displayable;
+import javax.microedition.lcdui.Form;
+import javax.microedition.lcdui.List;
+import javax.microedition.lcdui.TextField;
+import javax.microedition.lcdui.Command;
+import javax.microedition.lcdui.CommandListener;
+import javax.microedition.lcdui.Alert;
+import javax.microedition.lcdui.AlertType;
+import javax.microedition.io.Connector;
+import javax.microedition.io.HttpConnection;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.Vector;
 
 public class AshaStore extends MIDlet implements CommandListener {
@@ -306,15 +315,32 @@ public class AshaStore extends MIDlet implements CommandListener {
 
     private String decode(String s) {
 
-        s = s.replace('&', ' ');
-
-        s = s.replace("nbsp;", " ");
-        s = s.replace("quot;", "\"");
-        s = s.replace("amp;", "&");
-        s = s.replace("lt;", "<");
-        s = s.replace("gt;", ">");
+        s = replaceAll(s, "&", " ");
+        s = replaceAll(s, "nbsp;", " ");
+        s = replaceAll(s, "quot;", "\"");
+        s = replaceAll(s, "amp;", "&");
+        s = replaceAll(s, "lt;", "<");
+        s = replaceAll(s, "gt;", ">");
 
         return s;
+    }
+
+    private String replaceAll(String source, String pattern, String replacement) {
+        if (source == null) return "";
+        StringBuffer sb = new StringBuffer();
+        int idx = 0;
+        int patLen = pattern.length();
+        while (true) {
+            int found = source.indexOf(pattern, idx);
+            if (found == -1) {
+                sb.append(source.substring(idx));
+                break;
+            }
+            sb.append(source.substring(idx, found));
+            sb.append(replacement);
+            idx = found + patLen;
+        }
+        return sb.toString();
     }
 
     private String encode(String s) {
@@ -368,83 +394,44 @@ public class AshaStore extends MIDlet implements CommandListener {
         display.setCurrent(a, main);
     }
 
-    private class ResultListener
-            implements CommandListener {
+    private class ResultListener implements CommandListener {
 
         private AshaStore store;
         private String html;
 
-        ResultListener(
-                AshaStore store,
-                String html) {
-
+        ResultListener(AshaStore store, String html) {
             this.store = store;
             this.html = html;
         }
 
-        public void commandAction(
-                Command c,
-                Displayable d) {
+        public void commandAction(Command c, Displayable d) {
 
             if (c == List.SELECT_COMMAND) {
 
-                List l = (List)d;
-
+                List l = (List) d;
                 int n = l.getSelectedIndex();
+
+                if (n < 0 || n >= l.size()) {
+                    return;
+                }
 
                 String name = l.getString(n);
 
                 Form f = new Form(name);
 
-                f.append(
-                        "Название:\n" +
-                        name +
-                        "\n\n"
-                );
+                f.append("Название:\n" + name + "\n\n");
+                f.append("Источник:\nseries40.kiev.ua\n\n");
+                f.append("Страница получена через интернет.");
 
-                f.append(
-                        "Источник:\n" +
-                        "series40.kiev.ua\n\n"
-                );
-
-                f.append(
-                        "Страница получена через интернет."
-                );
-
-                Command back =
-                        new Command(
-                                "Назад",
-                                Command.BACK,
-                                1
-                        );
-
+                Command back = new Command("Назад", Command.BACK, 1);
                 f.addCommand(back);
+                f.setCommandListener(store);
 
-                f.setCommandListener(
-                        new CommandListener() {
-
-                            public void commandAction(
-                                    Command c,
-                                    Displayable d) {
-
-                                if (c.getCommandType()
-                                        == Command.BACK) {
-
-                                    display.setCurrent(
-                                            main
-                                    );
-                                }
-                            }
-                        }
-                );
-
-                display.setCurrent(f);
+                store.display.setCurrent(f);
 
             } else {
-
-                display.setCurrent(main);
+                store.display.setCurrent(store.main);
             }
         }
     }
 }
-```
