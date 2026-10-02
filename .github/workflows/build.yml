@@ -18,6 +18,11 @@ jobs:
           distribution: temurin
           java-version: '8'
 
+      - name: Скачать J2ME (MIDP/CLDC) библиотеку
+        run: |
+          mkdir -p lib
+          curl -sL "https://github.com/microedition/midp-api/raw/master/midpapi21.jar" -o lib/midpapi21.jar
+
       - name: Подготовить папки
         run: |
           mkdir -p bin dist
@@ -27,18 +32,15 @@ jobs:
 
       - name: Глубокая очистка Java-кода
         run: |
-          # Удаляем Markdown-разметку и кавычки
           sed -i 's/```java//gI' src/*.java
           sed -i 's/```//g' src/*.java
           sed -i 's/`//g' src/*.java
-          # Удаляем скрытые неразрывные пробелы (ASCII 160)
           sed -i 's/\xA0/ /g' src/*.java
-          # Удаляем случайные одиночные строки со словом java
           sed -i '/^[[:space:]]*java[[:space:]]*$/d' src/*.java
 
-      - name: Компиляция Java (MIDP 2.1)
+      - name: Компиляция Java (с MIDP 2.1 API)
         run: |
-          javac -source 1.7 -target 1.7 -d bin src/*.java
+          javac -source 1.7 -target 1.7 -bootclasspath lib/midpapi21.jar -d bin src/*.java
 
       - name: Создание манифеста
         run: |
