@@ -23,7 +23,7 @@ public class AshaStore extends MIDlet implements CommandListener {
     private Command searchCommand;
     private Command backCommand;
     private Command exitCommand;
-    
+
     private List resultsList;
     private Form detailsForm;
     private Command detailsBackCommand;
