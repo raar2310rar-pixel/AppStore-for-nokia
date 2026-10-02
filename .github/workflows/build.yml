@@ -1,27 +1,40 @@
-```yaml
 name: Build AshaStore
 
 on:
-  push:
   workflow_dispatch:
+  push:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Получить исходники
-        uses: actions/checkout@v6
+      - name: Скачать проект
+        uses: actions/checkout@v4
 
       - name: Скачать J2ME DevKit
         run: |
           git clone https://github.com/retro-systems-lab/j2me-devkit.git devkit
 
-      - name: Собрать AshaStore
+      - name: Установить инструменты J2ME
+        working-directory: devkit
         run: |
-          cd devkit
-          cp ../AshaStore.java src/MainMIDlet.java
           make setup
+
+      - name: Положить AshaStore.java в проект
+        run: |
+          cp AshaStore.java devkit/src/AshaStore.java
+
+      - name: Настроить MIDlet
+        working-directory: devkit
+        run: |
+          sed -i 's/MIDlet-Name: Demo/MIDlet-Name: Asha Store/' app.jad
+          sed -i 's/MIDlet-Vendor: Example/MIDlet-Vendor: Asha Store/' app.jad
+          sed -i 's/MIDlet-1: Demo,,MainMIDlet/MIDlet-1: Asha Store,,AshaStore/' app.jad
+
+      - name: Собрать JAR
+        working-directory: devkit
+        run: |
           make build
 
       - name: Переименовать JAR
@@ -34,4 +47,3 @@ jobs:
         with:
           name: AshaStore
           path: result/AshaStore.jar
-```
