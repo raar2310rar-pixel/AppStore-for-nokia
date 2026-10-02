@@ -21,10 +21,11 @@ jobs:
       - name: Скачать J2ME API (MIDP 2.0 / CLDC 1.1)
         run: |
           mkdir -p lib
-          curl -sL "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar
-          curl -sL "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar
+          # Флаг -A задает User-Agent, чтобы серверы не отклоняли curl с кодом 22
+          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar
+          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar
           
-          # Проверяем целостность скачанных JAR-файлов
+          # Проверка целостности архивов
           unzip -t lib/midpapi20.jar > /dev/null
           unzip -t lib/cldcapi11.jar > /dev/null
 
