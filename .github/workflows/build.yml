@@ -21,10 +21,13 @@ jobs:
       - name: Скачать J2ME API (MIDP 2.0 / CLDC 1.1)
         run: |
           mkdir -p lib
-          # Флаг -A задает User-Agent, чтобы серверы не отклоняли curl с кодом 22
-          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar
-          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar
+          # Качаем библиотеки с обработкой возможных сбоев сети
+          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar || \
+          curl -fsSL -A "Mozilla/5.0" "https://jcenter.bintray.com/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar
           
+          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar || \
+          curl -fsSL -A "Mozilla/5.0" "https://jcenter.bintray.com/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar
+
           # Проверка целостности архивов
           unzip -t lib/midpapi20.jar > /dev/null
           unzip -t lib/cldcapi11.jar > /dev/null
@@ -42,7 +45,7 @@ jobs:
           sed -i 's/\xA0/ /g' src/*.java
           sed -i '/^[[:space:]]*java[[:space:]]*$/d' src/*.java
 
-      - name: Компиляция Java (MIDP 2.1)
+      - name: Компиляция Java
         run: |
           javac -source 1.7 -target 1.7 -cp "lib/midpapi20.jar:lib/cldcapi11.jar" -d bin src/*.java
 
