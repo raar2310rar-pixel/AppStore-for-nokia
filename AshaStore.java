@@ -28,7 +28,7 @@ public class AshaStore extends MIDlet implements CommandListener {
     private Form detailsForm;
     private Command detailsBackCommand;
 
-    private static final String SITE = "https://series40.kiev.ua/";
+    private String baseUrl = "http://series40.kiev.ua/";
 
     public AshaStore() {
         display = Display.getDisplay(this);
@@ -73,7 +73,7 @@ public class AshaStore extends MIDlet implements CommandListener {
             if (n == 3) {
                 showSearch();
             } else {
-                loadPage(SITE);
+                loadPage(baseUrl);
             }
             return;
         }
@@ -91,7 +91,7 @@ public class AshaStore extends MIDlet implements CommandListener {
                 return;
             }
 
-            String url = SITE + "?s=" + encode(q);
+            String url = baseUrl + "?s=" + encode(q);
             loadPage(url);
             return;
         }
