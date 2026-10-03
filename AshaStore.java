@@ -31,27 +31,36 @@ public class AshaStore extends MIDlet implements CommandListener {
     private String baseUrl = "http://series40.kiev.ua/";
 
     public AshaStore() {
-        display = Display.getDisplay(this);
-
-        main = new List("Asha Store", List.IMPLICIT);
-        main.append("Последние игры", null);
-        main.append("Игры", null);
-        main.append("Программы", null);
-        main.append("Поиск", null);
-        main.append("Обновить", null);
-
-        main.setCommandListener(this);
-
-        exitCommand = new Command("Выход", Command.EXIT, 1);
-        backCommand = new Command("Назад", Command.BACK, 1);
-        detailsBackCommand = new Command("Назад", Command.BACK, 1);
-        searchCommand = new Command("Искать", Command.OK, 1);
-
-        main.addCommand(exitCommand);
+        // Конструктор остается пустым для предотвращения сбоев системы при инициализации
     }
 
     public void startApp() {
-        display.setCurrent(main);
+        try {
+            if (display == null) {
+                display = Display.getDisplay(this);
+            }
+
+            if (main == null) {
+                main = new List("Asha Store", List.IMPLICIT);
+                main.append("Последние игры", null);
+                main.append("Игры", null);
+                main.append("Программы", null);
+                main.append("Поиск", null);
+                main.append("Обновить", null);
+
+                exitCommand = new Command("Выход", Command.EXIT, 1);
+                backCommand = new Command("Назад", Command.BACK, 1);
+                detailsBackCommand = new Command("Назад", Command.BACK, 1);
+                searchCommand = new Command("Искать", Command.OK, 1);
+
+                main.addCommand(exitCommand);
+                main.setCommandListener(this);
+            }
+
+            display.setCurrent(main);
+        } catch (Throwable t) {
+            showFatalError("Ошибка запуска: " + t.getMessage());
+        }
     }
 
     public void pauseApp() {
@@ -61,214 +70,202 @@ public class AshaStore extends MIDlet implements CommandListener {
     }
 
     public void commandAction(Command c, Displayable d) {
-
-        if (c == exitCommand) {
-            notifyDestroyed();
-            return;
-        }
-
-        if (d == main && c == List.SELECT_COMMAND) {
-            int n = main.getSelectedIndex();
-
-            if (n == 3) {
-                showSearch();
-            } else {
-                loadPage(baseUrl);
-            }
-            return;
-        }
-
-        if (d == searchForm && c == searchCommand) {
-            String q = searchText.getString();
-
-            if (q.length() == 0) {
-                Alert a = new Alert("Поиск",
-                        "Введите название игры или программы.",
-                        null,
-                        AlertType.INFO);
-                a.setTimeout(Alert.FOREVER);
-                display.setCurrent(a, searchForm);
+        try {
+            if (c == exitCommand) {
+                notifyDestroyed();
                 return;
             }
 
-            String url = baseUrl + "?s=" + encode(q);
-            loadPage(url);
-            return;
-        }
-
-        if (d == resultsList && c == List.SELECT_COMMAND) {
-            int n = resultsList.getSelectedIndex();
-            if (n >= 0 && n < resultsList.size()) {
-                String name = resultsList.getString(n);
-                showDetails(name);
+            if (d == main && c == List.SELECT_COMMAND) {
+                int n = main.getSelectedIndex();
+                if (n == 3) {
+                    showSearch();
+                } else {
+                    loadPage(baseUrl);
+                }
+                return;
             }
-            return;
-        }
 
-        if (c == backCommand || c == detailsBackCommand) {
-            display.setCurrent(main);
+            if (d == searchForm && c == searchCommand) {
+                String q = searchText.getString();
+                if (q == null || q.trim().length() == 0) {
+                    Alert a = new Alert("Поиск", "Введите запрос.", null, AlertType.INFO);
+                    a.setTimeout(Alert.FOREVER);
+                    display.setCurrent(a, searchForm);
+                    return;
+                }
+
+                String url = baseUrl + "?s=" + encode(q);
+                loadPage(url);
+                return;
+            }
+
+            if (d == resultsList && c == List.SELECT_COMMAND) {
+                int n = resultsList.getSelectedIndex();
+                if (n >= 0 && n < resultsList.size()) {
+                    String name = resultsList.getString(n);
+                    showDetails(name);
+                }
+                return;
+            }
+
+            if (c == backCommand || c == detailsBackCommand) {
+                display.setCurrent(main);
+            }
+        } catch (Throwable t) {
+            showFatalError("Ошибка: " + t.getMessage());
         }
     }
 
     private void showSearch() {
-        searchForm = new Form("Поиск");
-
-        searchText = new TextField(
-                "Название:",
-                "",
-                40,
-                TextField.ANY
-        );
-
-        searchForm.append(searchText);
-        searchForm.addCommand(searchCommand);
-        searchForm.addCommand(backCommand);
-        searchForm.setCommandListener(this);
-
-        display.setCurrent(searchForm);
+        try {
+            searchForm = new Form("Поиск");
+            searchText = new TextField("Название:", "", 40, TextField.ANY);
+            searchForm.append(searchText);
+            searchForm.addCommand(searchCommand);
+            searchForm.addCommand(backCommand);
+            searchForm.setCommandListener(this);
+            display.setCurrent(searchForm);
+        } catch (Throwable t) {
+            showFatalError("Ошибка поиска: " + t.getMessage());
+        }
     }
 
     private void loadPage(final String url) {
-        final Form wait = new Form("Asha Store");
-        wait.append("Подключение к интернету...\n\n");
-        wait.append(url);
+        try {
+            final Form wait = new Form("Asha Store");
+            wait.append("Подключение...\n\n" + url);
+            display.setCurrent(wait);
 
-        display.setCurrent(wait);
-
-        new Thread(new Runnable() {
-            public void run() {
-                try {
-                    String html = downloadText(url);
-
-                    if (html == null || html.length() == 0) {
+            new Thread(new Runnable() {
+                public void run() {
+                    try {
+                        String html = downloadText(url);
+                        if (html == null || html.length() == 0) {
+                            showOffline();
+                            return;
+                        }
+                        showResults(html);
+                    } catch (Throwable e) {
                         showOffline();
-                        return;
                     }
-
-                    showResults(html);
-
-                } catch (Exception e) {
-                    showOffline();
                 }
-            }
-        }).start();
+            }).start();
+        } catch (Throwable t) {
+            showOffline();
+        }
     }
 
     private String downloadText(String url) throws Exception {
         HttpConnection con = null;
         InputStream in = null;
+        ByteArrayOutputStream out = null;
 
         try {
-            con = (HttpConnection) Connector.open(
-                    url,
-                    Connector.READ,
-                    true
-            );
-
+            con = (HttpConnection) Connector.open(url, Connector.READ, true);
             con.setRequestMethod(HttpConnection.GET);
-            con.setRequestProperty(
-                    "User-Agent",
-                    "Mozilla/5.0 Nokia Asha"
-            );
 
             int code = con.getResponseCode();
-
             if (code != HttpConnection.HTTP_OK) {
                 return null;
             }
 
             in = con.openInputStream();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            out = new ByteArrayOutputStream();
 
-            byte[] buffer = new byte[512];
+            byte[] buffer = new byte[256];
             int count;
 
             while ((count = in.read(buffer)) != -1) {
                 out.write(buffer, 0, count);
             }
 
-            return new String(out.toByteArray(), "UTF-8");
-
-        } finally {
-            if (in != null) {
-                try {
-                    in.close();
-                } catch (Exception e) {
-                }
+            byte[] data = out.toByteArray();
+            try {
+                return new String(data, "UTF-8");
+            } catch (Exception e) {
+                return new String(data);
             }
 
+        } finally {
+            if (out != null) {
+                try { out.close(); } catch (Exception e) {}
+            }
+            if (in != null) {
+                try { in.close(); } catch (Exception e) {}
+            }
             if (con != null) {
-                try {
-                    con.close();
-                } catch (Exception e) {
-                }
+                try { con.close(); } catch (Exception e) {}
             }
         }
     }
 
     private void showResults(String html) {
-        resultsList = new List("Asha Store", List.IMPLICIT);
-        Vector names = new Vector();
+        try {
+            resultsList = new List("Asha Store", List.IMPLICIT);
+            Vector names = new Vector();
 
-        int pos = 0;
+            int pos = 0;
+            while (pos < html.length()) {
+                int a = html.indexOf("<a", pos);
+                if (a == -1) break;
 
-        while (true) {
-            int a = html.indexOf("<a", pos);
-            if (a == -1) break;
+                int b = html.indexOf(">", a);
+                if (b == -1) break;
 
-            int b = html.indexOf(">", a);
-            if (b == -1) break;
+                int e = html.indexOf("</a>", b);
+                if (e == -1) break;
 
-            int e = html.indexOf("</a>", b);
-            if (e == -1) break;
+                String text = html.substring(b + 1, e);
+                text = stripTags(text);
+                text = decode(text);
+                text = text.trim();
 
-            String text = html.substring(b + 1, e);
-            text = stripTags(text);
-            text = decode(text);
-            text = text.trim();
-
-            if (text.length() > 2 && text.length() < 70) {
-                if (names.indexOf(text) == -1) {
-                    names.addElement(text);
-                    resultsList.append(text, null);
+                if (text.length() > 2 && text.length() < 70) {
+                    if (names.indexOf(text) == -1) {
+                        names.addElement(text);
+                        resultsList.append(text, null);
+                    }
                 }
+
+                pos = e + 4;
+                if (names.size() >= 25) break;
             }
 
-            pos = e + 4;
+            if (resultsList.size() == 0) {
+                resultsList.append("Ничего не найдено", null);
+            }
 
-            if (names.size() >= 30) break;
+            resultsList.setCommandListener(this);
+            resultsList.addCommand(backCommand);
+
+            display.setCurrent(resultsList);
+        } catch (Throwable t) {
+            showFatalError("Ошибка парсинга: " + t.getMessage());
         }
-
-        if (resultsList.size() == 0) {
-            resultsList.append("Ничего не найдено", null);
-        }
-
-        resultsList.setCommandListener(this);
-        resultsList.addCommand(backCommand);
-
-        display.setCurrent(resultsList);
     }
 
     private void showDetails(String name) {
-        detailsForm = new Form(name);
+        try {
+            detailsForm = new Form(name);
+            detailsForm.append("Название:\n" + name + "\n\n");
+            detailsForm.append("Источник:\nseries40.kiev.ua\n");
+            detailsForm.addCommand(detailsBackCommand);
+            detailsForm.setCommandListener(this);
 
-        detailsForm.append("Название:\n" + name + "\n\n");
-        detailsForm.append("Источник:\nseries40.kiev.ua\n\n");
-        detailsForm.append("Страница получена через интернет.");
-
-        detailsForm.addCommand(detailsBackCommand);
-        detailsForm.setCommandListener(this);
-
-        display.setCurrent(detailsForm);
+            display.setCurrent(detailsForm);
+        } catch (Throwable t) {
+            showFatalError("Ошибка описания: " + t.getMessage());
+        }
     }
 
     private String stripTags(String s) {
+        if (s == null) return "";
         StringBuffer r = new StringBuffer();
         boolean tag = false;
 
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-
             if (c == '<') {
                 tag = true;
             } else if (c == '>') {
@@ -277,18 +274,16 @@ public class AshaStore extends MIDlet implements CommandListener {
                 r.append(c);
             }
         }
-
         return r.toString();
     }
 
     private String decode(String s) {
-        s = replaceAll(s, "&", " ");
-        s = replaceAll(s, "nbsp;", " ");
-        s = replaceAll(s, "quot;", "\"");
-        s = replaceAll(s, "amp;", "&");
-        s = replaceAll(s, "lt;", "<");
-        s = replaceAll(s, "gt;", ">");
-
+        if (s == null) return "";
+        s = replaceAll(s, "&nbsp;", " ");
+        s = replaceAll(s, "&quot;", "\"");
+        s = replaceAll(s, "&amp;", "&");
+        s = replaceAll(s, "&lt;", "<");
+        s = replaceAll(s, "&gt;", ">");
         return s;
     }
 
@@ -311,14 +306,11 @@ public class AshaStore extends MIDlet implements CommandListener {
     }
 
     private String encode(String s) {
+        if (s == null) return "";
         StringBuffer r = new StringBuffer();
-
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-
-            if ((c >= 'a' && c <= 'z') ||
-                (c >= 'A' && c <= 'Z') ||
-                (c >= '0' && c <= '9')) {
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
                 r.append(c);
             } else if (c == ' ') {
                 r.append('+');
@@ -331,21 +323,24 @@ public class AshaStore extends MIDlet implements CommandListener {
                 r.append(h);
             }
         }
-
         return r.toString();
     }
 
     private void showOffline() {
-        Alert a = new Alert(
-                "Нет подключения",
-                "Извините, мы не можем работать.\n" +
-                "Нужно подключение к интернету:\n" +
-                "Wi-Fi или мобильный интернет.",
-                null,
-                AlertType.ERROR
-        );
+        try {
+            Alert a = new Alert("Ошибка сети", "Нет интернет-соединения.", null, AlertType.ERROR);
+            a.setTimeout(Alert.FOREVER);
+            display.setCurrent(a, main);
+        } catch (Throwable t) {}
+    }
 
-        a.setTimeout(Alert.FOREVER);
-        display.setCurrent(a, main);
+    private void showFatalError(String msg) {
+        try {
+            Alert a = new Alert("Сбой", msg, null, AlertType.ERROR);
+            a.setTimeout(Alert.FOREVER);
+            if (display != null) {
+                display.setCurrent(a);
+            }
+        } catch (Throwable t) {}
     }
 }
