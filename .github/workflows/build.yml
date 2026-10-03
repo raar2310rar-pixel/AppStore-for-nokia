@@ -22,8 +22,8 @@ jobs:
       - name: Download Wireless Toolkit / MIDP libraries
         run: |
           mkdir -p lib
-          curl -L https://github.com/microemu/microemu/raw/master/microemu-midp/src/main/resources/org/microemu/cldc-1.1.jar -o lib/cldc.jar
-          curl -L https://github.com/microemu/microemu/raw/master/microemu-midp/src/main/resources/org/microemu/midp-2.0.jar -o lib/midp.jar
+          curl -sL https://raw.githubusercontent.com/microemu/microemu/master/microemu-midp/src/main/resources/org/microemu/cldc-1.1.jar -o lib/cldc.jar
+          curl -sL https://raw.githubusercontent.com/microemu/microemu/master/microemu-midp/src/main/resources/org/microemu/midp-2.0.jar -o lib/midp.jar
 
       - name: Compile AshaStore.java
         run: |
