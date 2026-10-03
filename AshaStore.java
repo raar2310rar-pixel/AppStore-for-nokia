@@ -383,6 +383,9 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
 
     public void commandAction(Command c, Displayable d) {
         if (c == exitCmd) {
+            try {
+                destroyApp(true);
+            } catch (Exception e) {}
             notifyDestroyed();
         } else if (c == backCmd) {
             if (d == catalogList || d == searchForm || d == settingsForm || d == aboutForm || d == debugForm) {
