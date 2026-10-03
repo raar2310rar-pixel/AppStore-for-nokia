@@ -2,7 +2,9 @@ name: AshaStore
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -19,49 +21,143 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Fix line endings in MANIFEST.MF
+      - name: Install tools
         run: |
-          sudo apt-get install -y dos2unix
-          dos2unix META-INF/MANIFEST.MF
+          sudo apt-get update
+          sudo apt-get install -y dos2unix wget
 
-      - name: Verify Manifest file existence and content
+      - name: Check project files
         run: |
-          if [ -f "META-INF/MANIFEST.MF" ]; then
-            echo "=== MANIFEST.MF Content ==="
-            cat META-INF/MANIFEST.MF
-            echo ""
-          else
-            echo "Error: MANIFEST.MF not found!"
+          echo "=== Project files ==="
+          find . -maxdepth 3 -type f -print
+
+          echo ""
+          echo "=== Checking required files ==="
+
+          if [ ! -f "AshaStore.java" ]; then
+            echo "ERROR: AshaStore.java not found!"
             exit 1
           fi
 
-      - name: Prepare local build environment and download J2ME API
+          if [ ! -f "META-INF/MANIFEST.MF" ]; then
+            echo "ERROR: META-INF/MANIFEST.MF not found!"
+            exit 1
+          fi
+
+          echo "AshaStore.java: OK"
+          echo "META-INF/MANIFEST.MF: OK"
+
+      - name: Fix line endings
+        run: |
+          dos2unix AshaStore.java
+          dos2unix META-INF/MANIFEST.MF
+
+      - name: Show MANIFEST.MF
+        run: |
+          echo "=== MANIFEST.MF ==="
+          cat META-INF/MANIFEST.MF
+          echo ""
+
+      - name: Prepare build directory
         run: |
           mkdir -p build/classes
-          wget https://repo1.maven.org/maven2/org/microemu/microemulator/2.0.4/microemulator-2.0.4.jar -O j2me-api.jar
+          rm -f AshaStore.jar
+          rm -f AshaStore.jad
 
-      - name: Compile AshaStore.java source code
+      - name: Download J2ME API
         run: |
-          javac -source 1.4 -target 1.4 -cp j2me-api.jar -d build/classes AshaStore.java
+          wget -q \
+            https://repo1.maven.org/maven2/org/microemu/microemulator/2.0.4/microemulator-2.0.4.jar \
+            -O j2me-api.jar
 
-      - name: Build final JAR package
-        run: |
-          jar cvfm AshaStore.jar META-INF/MANIFEST.MF -C build/classes .
+          if [ ! -s "j2me-api.jar" ]; then
+            echo "ERROR: Failed to download J2ME API"
+            exit 1
+          fi
 
-      - name: Generate correct JAD descriptor
+          echo "J2ME API downloaded:"
+          ls -lh j2me-api.jar
+
+      - name: Compile AshaStore.java
         run: |
+          echo "=== Compiling AshaStore.java ==="
+
+          javac \
+            -source 1.4 \
+            -target 1.4 \
+            -cp j2me-api.jar \
+            -d build/classes \
+            AshaStore.java
+
+          echo ""
+          echo "Compilation successful."
+
+      - name: Show compiled classes
+        run: |
+          echo "=== Compiled classes ==="
+          find build/classes -type f -print
+
+      - name: Build JAR
+        run: |
+          echo "=== Building AshaStore.jar ==="
+
+          jar cvfm \
+            AshaStore.jar \
+            META-INF/MANIFEST.MF \
+            -C build/classes .
+
+          if [ ! -f "AshaStore.jar" ]; then
+            echo "ERROR: AshaStore.jar was not created!"
+            exit 1
+          fi
+
+          echo ""
+          echo "JAR created successfully:"
+          ls -lh AshaStore.jar
+
+      - name: Generate JAD
+        run: |
+          echo "=== Generating AshaStore.jad ==="
+
           JAR_SIZE=$(stat -c%s AshaStore.jar)
+
           cp META-INF/MANIFEST.MF AshaStore.jad
+
           echo "MIDlet-Jar-Size: $JAR_SIZE" >> AshaStore.jad
           echo "MIDlet-Jar-URL: AshaStore.jar" >> AshaStore.jad
-          # Гарантируем пустую строку в конце файла для Asha OS
+
           echo "" >> AshaStore.jad
+
           dos2unix AshaStore.jad
 
-      - name: Upload built artifacts to GitHub
+          echo ""
+          echo "=== AshaStore.jad ==="
+          cat AshaStore.jad
+
+      - name: Verify JAR and JAD
+        run: |
+          echo "=== Verifying files ==="
+
+          test -f AshaStore.jar
+          test -f AshaStore.jad
+
+          echo ""
+          echo "JAR:"
+          ls -lh AshaStore.jar
+
+          echo ""
+          echo "JAD:"
+          ls -lh AshaStore.jad
+
+          echo ""
+          echo "=== JAR contents ==="
+          jar tf AshaStore.jar
+
+      - name: Upload AshaStore package
         uses: actions/upload-artifact@v4
         with:
           name: AshaStore-Package
           path: |
             AshaStore.jar
             AshaStore.jad
+          if-no-files-found: error
