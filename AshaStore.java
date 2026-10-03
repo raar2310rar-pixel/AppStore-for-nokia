@@ -15,12 +15,13 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private Form aboutForm;
     private Form debugForm;
 
-    // Элементы управления и текстовые поля
+    // Элементы управления
     private TextField searchInput;
     private StringItem statusLabel;
     private StringItem appTitleLabel;
     private StringItem appDescLabel;
     private StringItem appUrlLabel;
+    private ImageItem appIconItem;
     private StringItem debugText;
 
     // Команды навигации
@@ -35,38 +36,40 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private Command debugCmd;
     private Command refreshCmd;
 
-    // Переменные состояния и хранилище данных
+    // Переменные состояния и данных
     private String baseUrl;
     private String currentCatalogUrl;
     private String selectedDownloadUrl;
     private String[] itemUrls;
     private String[] itemNames;
+    private Image[] itemImages;
     private int itemCount;
 
     public AshaStore() {
+        // Пустой конструктор для предотвращения OutOfMemory на старте KVM
     }
 
     protected void startApp() {
         if (display == null) {
             display = Display.getDisplay(this);
-            
-            // 1. Показываем заглушку моментально, чтобы телефон не решил, что приложение зависло
-            Form splash = new Form("Запуск");
-            splash.append("Инициализация интерфейса...");
+
+            // Показываем заставку, чтобы телефон не решил, что приложение зависло
+            Form splash = new Form("Asha Store");
+            splash.append(new StringItem("", "Загрузка..."));
             display.setCurrent(splash);
-            
-            // 2. Отправляем тяжелую сборку окон в фоновый поток
+
+            // Запускаем сборку интерфейса в отдельном потоке
             Thread initThread = new Thread(this);
             initThread.start();
         }
     }
 
-    // Этот метод выполнится в фоне, не блокируя систему телефона
     public void run() {
         try {
             baseUrl = "http://series40.kiev.ua/";
             itemUrls = new String[40];
             itemNames = new String[40];
+            itemImages = new Image[40];
             itemCount = 0;
 
             initCommands();
@@ -77,7 +80,6 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
             initAboutForm();
             initDebugForm();
 
-            // 3. Когда всё готово, безопасно переключаем экран на главное меню
             display.callSerially(new Runnable() {
                 public void run() {
                     display.setCurrent(mainMenuList);
@@ -121,7 +123,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
 
     private void initSearchForm() {
         searchForm = new Form("Поиск приложений");
-        searchInput = new TextField("Запрос:", "", 32, TextField.ANY);
+        searchInput = new TextField("Поиск:", "", 32, TextField.ANY);
         searchForm.append(searchInput);
 
         searchForm.addCommand(executeSearchCmd);
@@ -130,12 +132,14 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     }
 
     private void initDetailForm() {
-        detailForm = new Form("Карточка программы");
+        detailForm = new Form("Программа");
         statusLabel = new StringItem("Статус: ", "Готово");
         appTitleLabel = new StringItem("Название: ", "");
         appDescLabel = new StringItem("Описание: ", "");
         appUrlLabel = new StringItem("Ссылка: ", "");
+        appIconItem = new ImageItem(null, null, ImageItem.LAYOUT_CENTER, "Изображение недоступно");
 
+        detailForm.append(appIconItem);
         detailForm.append(statusLabel);
         detailForm.append(appTitleLabel);
         detailForm.append(appDescLabel);
@@ -148,7 +152,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
 
     private void initSettingsForm() {
         settingsForm = new Form("Настройки");
-        settingsForm.append(new StringItem("Сервер базы: ", baseUrl));
+        settingsForm.append(new StringItem("Сервер: ", baseUrl));
         settingsForm.append(new StringItem("Платформа: ", "Nokia Asha Platform 14.0.4"));
         settingsForm.addCommand(backCmd);
         settingsForm.setCommandListener(this);
@@ -156,17 +160,18 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
 
     private void initAboutForm() {
         aboutForm = new Form("О программе");
-        
+
+        // Вытягиваем версию из MANIFEST.MF
         String version = getAppProperty("MIDlet-Version");
         if (version == null || version.trim().length() == 0) {
             version = "1.01.1";
         }
-        
+
         StringBuffer aboutText = new StringBuffer();
-        aboutText.append("Клиент каталога для Nokia Asha\nВерсия: ");
+        aboutText.append("Магазин приложений для Nokia Asha\nВерсия: ");
         aboutText.append(version);
         aboutText.append("\nПлатформа: MIDP 2.1 / CLDC 1.1");
-        
+
         aboutForm.append(new StringItem("Asha Store", aboutText.toString()));
         aboutForm.addCommand(backCmd);
         aboutForm.setCommandListener(this);
@@ -174,7 +179,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
 
     private void initDebugForm() {
         debugForm = new Form("Отладчик");
-        debugText = new StringItem("Статус: ", "Система инициализирована без ошибок.\n");
+        debugText = new StringItem("Статус: ", "Система инициализирована.\n");
         debugForm.append(debugText);
         debugForm.addCommand(backCmd);
         debugForm.setCommandListener(this);
@@ -203,7 +208,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
         catalogList.setCommandListener(this);
         display.setCurrent(catalogList);
 
-        appendLog("Запрос сети...");
+        appendLog("Запрос данных...");
 
         new Thread(new Runnable() {
             public void run() {
@@ -221,42 +226,30 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                         StringBuffer sb = new StringBuffer();
                         int ch;
                         int readLimit = 0;
-                        while ((ch = is.read()) != -1 && readLimit < 24000) {
+                        while ((ch = is.read()) != -1 && readLimit < 32000) {
                             sb.append((char) ch);
                             readLimit++;
                         }
 
-                        final String htmlData = sb.toString();
+                        final String responseData = sb.toString();
                         display.callSerially(new Runnable() {
                             public void run() {
-                                if (isSearch) {
-                                    parseSearchResults(htmlData);
-                                } else {
-                                    parseCatalogHtml(htmlData);
-                                }
+                                parseData(responseData, isSearch);
                             }
                         });
                     } else {
-                        final StringBuffer errSb = new StringBuffer();
-                        errSb.append("Сервер ответил кодом: ");
-                        errSb.append(responseCode);
+                        final String errCode = "Ошибка сервера: " + responseCode;
                         display.callSerially(new Runnable() {
                             public void run() {
-                                showErrorScreen(errSb.toString());
+                                showErrorScreen(errCode);
                             }
                         });
                     }
                 } catch (Throwable t) {
-                    final StringBuffer tSb = new StringBuffer();
-                    tSb.append("Ошибка сети: ");
-                    if (t.getMessage() != null) {
-                        tSb.append(t.getMessage());
-                    } else {
-                        tSb.append(t.getClass().getName());
-                    }
+                    final String errMsg = "Ошибка сети: " + (t.getMessage() != null ? t.getMessage() : t.getClass().getName());
                     display.callSerially(new Runnable() {
                         public void run() {
-                            showErrorScreen(tSb.toString());
+                            showErrorScreen(errMsg);
                         }
                     });
                 } finally {
@@ -269,20 +262,20 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
         }).start();
     }
 
-    private void parseCatalogHtml(String html) {
-        catalogList.setTitle("Каталог");
+    private void parseData(String data, boolean isSearch) {
+        catalogList.setTitle(isSearch ? "Результаты поиска" : "Каталог");
         itemCount = 0;
-        int index = 0;
 
-        while ((index = html.indexOf("<a href=", index)) != -1) {
-            int startUrl = html.indexOf("\"", index) + 1;
-            int endUrl = html.indexOf("\"", startUrl);
-            int startText = html.indexOf(">", endUrl) + 1;
-            int endText = html.indexOf("</a>", startText);
+        int index = 0;
+        while ((index = data.indexOf("<a href=", index)) != -1) {
+            int startUrl = data.indexOf("\"", index) + 1;
+            int endUrl = data.indexOf("\"", startUrl);
+            int startText = data.indexOf(">", endUrl) + 1;
+            int endText = data.indexOf("</a>", startText);
 
             if (startUrl > 0 && endUrl > startUrl && startText > 0 && endText > startText) {
-                String link = html.substring(startUrl, endUrl).trim();
-                String title = stripTags(html.substring(startText, endText).trim());
+                String link = data.substring(startUrl, endUrl).trim();
+                String title = stripTags(data.substring(startText, endText).trim());
 
                 if (title.length() > 0 && itemCount < 40) {
                     itemUrls[itemCount] = link;
@@ -296,7 +289,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
         }
 
         if (catalogList.size() == 0) {
-            catalogList.append("Пусто или нет данных", null);
+            catalogList.append("Ничего не найдено", null);
         }
     }
 
@@ -314,11 +307,6 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
             }
         }
         return clean.toString();
-    }
-
-    private void parseSearchResults(String html) {
-        catalogList.setTitle("Результаты поиска");
-        parseCatalogHtml(html);
     }
 
     private void executeSearch() {
@@ -339,9 +327,9 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
             selectedDownloadUrl = itemUrls[index];
 
             appTitleLabel.setText(title);
-            appDescLabel.setText("Выбран объект из базы данных Asha Store.");
+            appDescLabel.setText("Объект каталога");
             appUrlLabel.setText(selectedDownloadUrl);
-            statusLabel.setText("Готов к передаче");
+            statusLabel.setText("Готово к скачиванию");
 
             display.setCurrent(detailForm);
         }
@@ -359,13 +347,10 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                 }
                 targetUrl.append(selectedDownloadUrl);
 
-                appendLog("Вызов передачи в браузер...");
+                appendLog("Запуск скачивания...");
                 platformRequest(targetUrl.toString());
             } catch (Exception e) {
-                StringBuffer errSb = new StringBuffer();
-                errSb.append("Ошибка вызова браузера: ");
-                errSb.append(e.getMessage());
-                statusLabel.setText(errSb.toString());
+                statusLabel.setText("Ошибка: " + e.getMessage());
             }
         }
     }
@@ -379,18 +364,12 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     }
 
     private void showFatalError(Throwable t) {
-        final Form errForm = new Form("Ошибка запуска");
-        StringBuffer errSb = new StringBuffer();
-        errSb.append("Сбой инициализации: ");
-        if (t.getMessage() != null) {
-            errSb.append(t.getMessage());
-        } else {
-            errSb.append(t.getClass().getName());
-        }
-        errForm.append(new StringItem("Детали: ", errSb.toString()));
+        final Form errForm = new Form("Сбой запуска");
+        String msg = t.getMessage() != null ? t.getMessage() : t.getClass().getName();
+        errForm.append(new StringItem("Ошибка: ", msg));
         errForm.addCommand(exitCmd);
         errForm.setCommandListener(this);
-        
+
         display.callSerially(new Runnable() {
             public void run() {
                 display.setCurrent(errForm);
@@ -438,22 +417,13 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                     loadUrlData(baseUrl, false);
                     break;
                 case 1:
-                    StringBuffer gamesSb = new StringBuffer();
-                    gamesSb.append(baseUrl);
-                    gamesSb.append("games");
-                    loadUrlData(gamesSb.toString(), false);
+                    loadUrlData(baseUrl + "games", false);
                     break;
                 case 2:
-                    StringBuffer themesSb = new StringBuffer();
-                    themesSb.append(baseUrl);
-                    themesSb.append("themes");
-                    loadUrlData(themesSb.toString(), false);
+                    loadUrlData(baseUrl + "themes", false);
                     break;
                 case 3:
-                    StringBuffer newSb = new StringBuffer();
-                    newSb.append(baseUrl);
-                    newSb.append("new");
-                    loadUrlData(newSb.toString(), false);
+                    loadUrlData(baseUrl + "new", false);
                     break;
                 case 4:
                     display.setCurrent(searchForm);
