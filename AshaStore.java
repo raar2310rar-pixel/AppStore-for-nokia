@@ -60,7 +60,6 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                 itemNames = new String[40];
                 itemCount = 0;
 
-                // Создаем UI строго в основном графическом потоке
                 initCommands();
                 initMainMenu();
                 initSearchForm();
@@ -78,7 +77,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     }
 
     public void run() {
-        // Резервный метод выполнения фоновых задач
+        // Резервный метод
     }
 
     private void initCommands() {
@@ -207,7 +206,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                 try {
                     conn = (HttpConnection) Connector.open(requestUrl);
                     conn.setRequestMethod(HttpConnection.GET);
-                    conn.setRequestProperty("User-Agent", "NokiaAsha");
+                    conn.setRequestProperty("User-Agent", "NokiaAsha311/14.06");
 
                     int responseCode = conn.getResponseCode();
 
@@ -216,7 +215,8 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                         StringBuffer sb = new StringBuffer();
                         int ch;
                         int readLimit = 0;
-                        while ((ch = is.read()) != -1 && readLimit < 32000) {
+                        // Чтение байтов напрямую без сотворения тяжелых объектов
+                        while ((ch = is.read()) != -1 && readLimit < 16000) {
                             sb.append((char) ch);
                             readLimit++;
                         }
@@ -300,13 +300,47 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
         return clean.toString();
     }
 
+    // Совместимый с CLDC 1.1 URL-кодировщик без вызова несуществующих методов
+    private String urlEncode(String s) {
+        StringBuffer sb = new StringBuffer();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_') {
+                sb.append(c);
+            } else if (c == ' ') {
+                sb.append("+");
+            } else {
+                // Безопасная ручная замена базовых символов кириллицы под UTF-8
+                int code = (int) c;
+                if (code >= 0x0410 && code <= 0x044F) { // А-Я, а-я
+                    int utf16 = code;
+                    int b1 = 0xD0;
+                    int b2 = 0x90 + (utf16 - 0x0410);
+                    if (utf16 >= 0x0430) {
+                        b1 = (utf16 <= 0x043F) ? 0xD0 : 0xD1;
+                        b2 = (utf16 <= 0x043F) ? (0x80 + (utf16 - 0x0430)) : (0x80 + (utf16 - 0x0440));
+                    }
+                    sb.append("%").append(toHex(b1)).append("%").append(toHex(b2));
+                } else {
+                    sb.append(c);
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    private String toHex(int b) {
+        String hex = "0123456789ABCDEF";
+        return "" + hex.charAt((b >> 4) & 0x0F) + hex.charAt(b & 0x0F);
+    }
+
     private void executeSearch() {
         String query = searchInput.getString().trim();
         if (query.length() > 0) {
             StringBuffer searchUrlSb = new StringBuffer();
             searchUrlSb.append(baseUrl);
-            searchUrlSb.append("search?q=");
-            searchUrlSb.append(query);
+            searchUrlSb.append("search/?q=");
+            searchUrlSb.append(urlEncode(query));
 
             loadUrlData(searchUrlSb.toString(), true);
         }
@@ -409,13 +443,13 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                     loadUrlData(baseUrl, false);
                     break;
                 case 1:
-                    loadUrlData(baseUrl + "games", false);
+                    loadUrlData(baseUrl + "games/", false);
                     break;
                 case 2:
-                    loadUrlData(baseUrl + "themes", false);
+                    loadUrlData(baseUrl + "themes/", false);
                     break;
                 case 3:
-                    loadUrlData(baseUrl + "new", false);
+                    loadUrlData(baseUrl + "new/", false);
                     break;
                 case 4:
                     display.setCurrent(searchForm);
