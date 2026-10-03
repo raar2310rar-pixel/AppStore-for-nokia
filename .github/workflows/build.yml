@@ -99,34 +99,13 @@ jobs:
 
 
       # --------------------------------------------------
-      # 6. Получаем preverify
-      # --------------------------------------------------
-
-      - name: Download preverify
-        run: |
-          mkdir -p tools/preverify
-
-          echo "Downloading Java ME preverifier..."
-
-          wget -q \
-            https://github.com/SodalisRetro/j2me-tools/releases/download/v1.0/preverify-linux \
-            -O tools/preverify/preverify
-
-          chmod +x tools/preverify/preverify
-
-          echo "Preverify:"
-          tools/preverify/preverify -help || true
-
-
-      # --------------------------------------------------
-      # 7. Подготовка
+      # 6. Подготовка
       # --------------------------------------------------
 
       - name: Prepare build
         run: |
           rm -rf build
 
-          mkdir -p build/tmpclasses
           mkdir -p build/classes
 
           rm -f AshaStore.jar
@@ -134,7 +113,7 @@ jobs:
 
 
       # --------------------------------------------------
-      # 8. Компиляция Java ME
+      # 7. Компиляция Java ME
       # --------------------------------------------------
 
       - name: Compile MIDlet
@@ -146,7 +125,7 @@ jobs:
             -target 1.6 \
             -bootclasspath \
             tools/lib/cldcapi11.jar:tools/lib/midpapi20.jar \
-            -d build/tmpclasses \
+            -d build/classes \
             AshaStore.java
 
           echo ""
@@ -154,25 +133,7 @@ jobs:
 
 
       # --------------------------------------------------
-      # 9. Preverification
-      # --------------------------------------------------
-
-      - name: Preverify MIDlet
-        run: |
-          echo "=== Preverification ==="
-
-          tools/preverify/preverify \
-            -classpath \
-            tools/lib/cldcapi11.jar:tools/lib/midpapi20.jar \
-            -d build/classes \
-            build/tmpclasses
-
-          echo ""
-          echo "Preverification successful."
-
-
-      # --------------------------------------------------
-      # 10. Создаём JAR
+      # 8. Создаём JAR
       # --------------------------------------------------
 
       - name: Build JAR
@@ -195,7 +156,7 @@ jobs:
 
 
       # --------------------------------------------------
-      # 11. Создаём правильный JAD
+      # 9. Создаём правильный JAD
       # --------------------------------------------------
 
       - name: Generate JAD
@@ -221,7 +182,7 @@ jobs:
 
 
       # --------------------------------------------------
-      # 12. Проверка JAR
+      # 10. Проверка JAR
       # --------------------------------------------------
 
       - name: Verify JAR
@@ -241,7 +202,7 @@ jobs:
 
 
       # --------------------------------------------------
-      # 13. Проверка JAD
+      # 11. Проверка JAD
       # --------------------------------------------------
 
       - name: Verify JAD
@@ -257,7 +218,7 @@ jobs:
 
 
       # --------------------------------------------------
-      # 14. Загружаем готовые файлы
+      # 12. Загружаем готовые файлы
       # --------------------------------------------------
 
       - name: Upload AshaStore package
