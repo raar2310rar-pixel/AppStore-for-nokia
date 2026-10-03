@@ -1,346 +1,415 @@
-import javax.microedition.midlet.MIDlet;
-import javax.microedition.lcdui.Display;
-import javax.microedition.lcdui.Displayable;
-import javax.microedition.lcdui.Form;
-import javax.microedition.lcdui.List;
-import javax.microedition.lcdui.TextField;
-import javax.microedition.lcdui.Command;
-import javax.microedition.lcdui.CommandListener;
-import javax.microedition.lcdui.Alert;
-import javax.microedition.lcdui.AlertType;
-import javax.microedition.io.Connector;
-import javax.microedition.io.HttpConnection;
-import java.io.InputStream;
-import java.io.ByteArrayOutputStream;
-import java.util.Vector;
+import javax.microedition.midlet.*;
+import javax.microedition.lcdui.*;
+import javax.microedition.io.*;
+import java.io.*;
 
 public class AshaStore extends MIDlet implements CommandListener {
-
     private Display display;
-    private List main;
+
+    // Экраны
+    private List mainMenuList;
+    private List catalogList;
     private Form searchForm;
-    private TextField searchText;
-    private Command searchCommand;
-    private Command backCommand;
-    private Command exitCommand;
+    private Form detailForm;
+    private Form settingsForm;
+    private Form aboutForm;
+    private Form debugForm;
 
-    private List resultsList;
-    private Form detailsForm;
-    private Command detailsBackCommand;
+    // Элементы ввода и вывода
+    private TextField searchInput;
+    private StringItem statusLabel;
+    private StringItem appTitleLabel;
+    private StringItem appDescLabel;
+    private StringItem appUrlLabel;
+    private StringItem debugText;
 
-    private String baseUrl = "http://series40.kiev.ua/";
+    // Команды
+    private Command exitCmd;
+    private Command backCmd;
+    private Command selectCmd;
+    private Command searchCmd;
+    private Command executeSearchCmd;
+    private Command downloadCmd;
+    private Command settingsCmd;
+    private Command aboutCmd;
+    private Command debugCmd;
+    private Command refreshCmd;
+
+    // Данные и состояние
+    private String baseUrl;
+    private String currentCatalogUrl;
+    private String selectedDownloadUrl;
+    private String[] itemUrls;
+    private String[] itemNames;
+    private int itemCount;
+    private int currentPage;
 
     public AshaStore() {
-        // Конструктор остается пустым для предотвращения сбоев системы при инициализации
+        baseUrl = "http://series40.kiev.ua/";
+        itemUrls = new String[100];
+        itemNames = new String[100];
+        itemCount = 0;
+        currentPage = 1;
     }
 
-    public void startApp() {
-        try {
-            if (display == null) {
-                display = Display.getDisplay(this);
-            }
-
-            if (main == null) {
-                main = new List("Asha Store", List.IMPLICIT);
-                main.append("Последние игры", null);
-                main.append("Игры", null);
-                main.append("Программы", null);
-                main.append("Поиск", null);
-                main.append("Обновить", null);
-
-                exitCommand = new Command("Выход", Command.EXIT, 1);
-                backCommand = new Command("Назад", Command.BACK, 1);
-                detailsBackCommand = new Command("Назад", Command.BACK, 1);
-                searchCommand = new Command("Искать", Command.OK, 1);
-
-                main.addCommand(exitCommand);
-                main.setCommandListener(this);
-            }
-
-            display.setCurrent(main);
-        } catch (Throwable t) {
-            showFatalError("Ошибка запуска: " + t.getMessage());
+    protected void startApp() {
+        if (display == null) {
+            display = Display.getDisplay(this);
+            initCommands();
+            initMainMenu();
+            initSearchForm();
+            initDetailForm();
+            initSettingsForm();
+            initAboutForm();
+            initDebugForm();
+            
+            display.setCurrent(mainMenuList);
         }
     }
 
-    public void pauseApp() {
+    private void initCommands() {
+        exitCmd = new Command("Выход", Command.EXIT, 1);
+        backCmd = new Command("Назад", Command.BACK, 1);
+        selectCmd = new Command("Выбрать", Command.OK, 1);
+        searchCmd = new Command("Поиск", Command.SCREEN, 2);
+        executeSearchCmd = new Command("Искать", Command.OK, 1);
+        downloadCmd = new Command("Скачать", Command.SCREEN, 1);
+        settingsCmd = new Command("Настройки", Command.SCREEN, 3);
+        aboutCmd = new Command("О программе", Command.SCREEN, 4);
+        debugCmd = new Command("Логи", Command.SCREEN, 5);
+        refreshCmd = new Command("Обновить", Command.SCREEN, 2);
     }
 
-    public void destroyApp(boolean unconditional) {
+    private void initMainMenu() {
+        mainMenuList = new List("Asha Store", List.IMPLICIT);
+        mainMenuList.append("Каталог приложений", null);
+        mainMenuList.append("Игры", null);
+        mainMenuList.append("Темы", null);
+        mainMenuList.append("Новинки", null);
+        mainMenuList.append("Поиск", null);
+        mainMenuList.append("Настройки", null);
+        mainMenuList.append("О программе", null);
+        mainMenuList.append("Отладка", null);
+
+        mainMenuList.addCommand(exitCmd);
+        mainMenuList.addCommand(searchCmd);
+        mainMenuList.addCommand(settingsCmd);
+        mainMenuList.addCommand(aboutCmd);
+        mainMenuList.setCommandListener(this);
     }
+
+    private void initSearchForm() {
+        searchForm = new Form("Поиск в Store");
+        searchInput = new TextField("Введите запрос:", "", 32, TextField.ANY);
+        searchForm.append(searchInput);
+        
+        searchForm.addCommand(executeSearchCmd);
+        searchForm.addCommand(backCmd);
+        searchForm.setCommandListener(this);
+    }
+
+    private void initDetailForm() {
+        detailForm = new Form("Информация");
+        statusLabel = new StringItem("Статус: ", "Готово");
+        appTitleLabel = new StringItem("Название: ", "");
+        appDescLabel = new StringItem("Описание: ", "");
+        appUrlLabel = new StringItem("Ссылка: ", "");
+
+        detailForm.append(statusLabel);
+        detailForm.append(appTitleLabel);
+        detailForm.append(appDescLabel);
+        detailForm.append(appUrlLabel);
+
+        detailForm.addCommand(downloadCmd);
+        detailForm.addCommand(backCmd);
+        detailForm.setCommandListener(this);
+    }
+
+    private void initSettingsForm() {
+        settingsForm = new Form("Настройки");
+        StringItem info = new StringItem("Сервер: ", baseUrl);
+        StringItem userAgent = new StringItem("User-Agent: ", "NokiaS40/AshaStore");
+        settingsForm.append(info);
+        settingsForm.append(userAgent);
+        settingsForm.addCommand(backCmd);
+        settingsForm.setCommandListener(this);
+    }
+
+    private void initAboutForm() {
+        aboutForm = new Form("О программе");
+        aboutForm.append(new StringItem("Asha Store", "Клиент каталога для Nokia S40\nВерсия: 1.0.0\nПлатформа: MIDP 2.1 / CLDC 1.1"));
+        aboutForm.addCommand(backCmd);
+        aboutForm.setCommandListener(this);
+    }
+
+    private void initDebugForm() {
+        debugForm = new Form("Системный лог");
+        debugText = new StringItem("Лог: ", "Запуск системы прошел успешно.\n");
+        debugForm.append(debugText);
+        debugForm.addCommand(backCmd);
+        debugForm.setCommandListener(this);
+    }
+
+    private void logDebug(String message) {
+        StringBuffer sb = new StringBuffer();
+        sb.append(debugText.getText());
+        sb.append("\n> ");
+        sb.append(message);
+        debugText.setText(sb.toString());
+    }
+
+    private void loadUrlData(final String requestUrl, final boolean isSearch) {
+        currentCatalogUrl = requestUrl;
+        catalogList = new List("Загрузка...", List.IMPLICIT);
+        catalogList.addCommand(backCmd);
+        catalogList.addCommand(searchCmd);
+        catalogList.addCommand(refreshCmd);
+        catalogList.setCommandListener(this);
+        display.setCurrent(catalogList);
+
+        logDebug("Запрос: ");
+        logDebug(requestUrl);
+
+        new Thread(new Runnable() {
+            public void run() {
+                HttpConnection conn = null;
+                InputStream is = null;
+                try {
+                    conn = (HttpConnection) Connector.open(requestUrl);
+                    conn.setRequestMethod(HttpConnection.GET);
+                    conn.setRequestProperty("User-Agent", "NokiaS40/AshaStore");
+
+                    int responseCode = conn.getResponseCode();
+                    logDebug("Ответ от сервера получен.");
+
+                    if (responseCode == HttpConnection.HTTP_OK) {
+                        is = conn.openInputStream();
+                        StringBuffer sb = new StringBuffer();
+                        int ch;
+                        int readLimit = 0;
+                        while ((ch = is.read()) != -1 && readLimit < 64000) {
+                            sb.append((char) ch);
+                            readLimit++;
+                        }
+                        
+                        logDebug("Размер полученных данных обработан.");
+                        if (isSearch) {
+                            parseSearchResults(sb.toString());
+                        } else {
+                            parseCatalogHtml(sb.toString());
+                        }
+                    } else {
+                        StringBuffer errSb = new StringBuffer();
+                        errSb.append("Ошибка сервера: ");
+                        errSb.append(responseCode);
+                        logDebug(errSb.toString());
+                        showErrorScreen(errSb.toString());
+                    }
+                } catch (Throwable t) {
+                    StringBuffer tSb = new StringBuffer();
+                    tSb.append("Ошибка подключения: ");
+                    if (t.getMessage() != null) {
+                        tSb.append(t.getMessage());
+                    } else {
+                        tSb.append(t.getClass().getName());
+                    }
+                    logDebug(tSb.toString());
+                    showErrorScreen(tSb.toString());
+                } finally {
+                    try {
+                        if (is != null) is.close();
+                        if (conn != null) conn.close();
+                    } catch (Exception e) {}
+                }
+            }
+        }).start();
+    }
+
+    private void parseCatalogHtml(String html) {
+        catalogList.setTitle("Каталог");
+        itemCount = 0;
+        int index = 0;
+
+        while ((index = html.indexOf("<a href=", index)) != -1) {
+            int startUrl = html.indexOf("\"", index) + 1;
+            int endUrl = html.indexOf("\"", startUrl);
+            int startText = html.indexOf(">", endUrl) + 1;
+            int endText = html.indexOf("</a>", startText);
+
+            if (startUrl > 0 && endUrl > startUrl && startText > 0 && endText > startText) {
+                String link = html.substring(startUrl, endUrl).trim();
+                String title = cleanHtmlTags(html.substring(startText, endText).trim());
+
+                if (title.length() > 0 && itemCount < 100) {
+                    itemUrls[itemCount] = link;
+                    itemNames[itemCount] = title;
+                    catalogList.append(title, null);
+                    itemCount++;
+                }
+            }
+            index = endText + 4;
+            if (itemCount >= 100) break;
+        }
+
+        if (catalogList.size() == 0) {
+            catalogList.append("Пусто или нет данных", null);
+        }
+    }
+
+    private String cleanHtmlTags(String input) {
+        StringBuffer clean = new StringBuffer();
+        boolean inTag = false;
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            if (c == '<') {
+                inTag = true;
+            } else if (c == '>') {
+                inTag = false;
+            } else if (!inTag) {
+                clean.append(c);
+            }
+        }
+        return clean.toString();
+    }
+
+    private void parseSearchResults(String html) {
+        catalogList.setTitle("Результаты поиска");
+        parseCatalogHtml(html);
+    }
+
+    private void executeSearch() {
+        String query = searchInput.getString().trim();
+        if (query.length() > 0) {
+            StringBuffer searchUrlSb = new StringBuffer();
+            searchUrlSb.append(baseUrl);
+            searchUrlSb.append("search?q=");
+            searchUrlSb.append(query);
+            
+            loadUrlData(searchUrlSb.toString(), true);
+        }
+    }
+
+    private void openAppDetails(int index) {
+        if (index >= 0 && index < itemCount) {
+            String title = itemNames[index];
+            selectedDownloadUrl = itemUrls[index];
+
+            appTitleLabel.setText(title);
+            appDescLabel.setText("Объект из базы данных Asha Store.");
+            appUrlLabel.setText(selectedDownloadUrl);
+            statusLabel.setText("Готов к скачиванию");
+
+            display.setCurrent(detailForm);
+        }
+    }
+
+    private void startDownload() {
+        if (selectedDownloadUrl != null && selectedDownloadUrl.length() > 0) {
+            try {
+                StringBuffer targetUrl = new StringBuffer();
+                if (!selectedDownloadUrl.startsWith("http")) {
+                    targetUrl.append(baseUrl);
+                    if (!selectedDownloadUrl.startsWith("/")) {
+                        targetUrl.append("/");
+                    }
+                }
+                targetUrl.append(selectedDownloadUrl);
+
+                logDebug("Передача в браузер: ");
+                logDebug(targetUrl.toString());
+
+                platformRequest(targetUrl.toString());
+            } catch (Exception e) {
+                StringBuffer errSb = new StringBuffer();
+                errSb.append("Сбой передачи: ");
+                errSb.append(e.getMessage());
+                statusLabel.setText(errSb.toString());
+                logDebug(errSb.toString());
+            }
+        }
+    }
+
+    private void showErrorScreen(String message) {
+        Form errForm = new Form("Ошибка");
+        errForm.append(new StringItem("Детали: ", message));
+        errForm.addCommand(backCmd);
+        errForm.setCommandListener(this);
+        display.setCurrent(errForm);
+    }
+
+    protected void pauseApp() {}
+
+    protected void destroyApp(boolean unconditional) {}
 
     public void commandAction(Command c, Displayable d) {
-        try {
-            if (c == exitCommand) {
-                notifyDestroyed();
-                return;
-            }
-
-            if (d == main && c == List.SELECT_COMMAND) {
-                int n = main.getSelectedIndex();
-                if (n == 3) {
-                    showSearch();
+        if (c == exitCmd) {
+            notifyDestroyed();
+        } else if (c == backCmd) {
+            if (d == catalogList || d == searchForm || d == settingsForm || d == aboutForm || d == debugForm) {
+                display.setCurrent(mainMenuList);
+            } else if (d == detailForm) {
+                if (catalogList != null) {
+                    display.setCurrent(catalogList);
                 } else {
-                    loadPage(baseUrl);
+                    display.setCurrent(mainMenuList);
                 }
-                return;
-            }
-
-            if (d == searchForm && c == searchCommand) {
-                String q = searchText.getString();
-                if (q == null || q.trim().length() == 0) {
-                    Alert a = new Alert("Поиск", "Введите запрос.", null, AlertType.INFO);
-                    a.setTimeout(Alert.FOREVER);
-                    display.setCurrent(a, searchForm);
-                    return;
-                }
-
-                String url = baseUrl + "?s=" + encode(q);
-                loadPage(url);
-                return;
-            }
-
-            if (d == resultsList && c == List.SELECT_COMMAND) {
-                int n = resultsList.getSelectedIndex();
-                if (n >= 0 && n < resultsList.size()) {
-                    String name = resultsList.getString(n);
-                    showDetails(name);
-                }
-                return;
-            }
-
-            if (c == backCommand || c == detailsBackCommand) {
-                display.setCurrent(main);
-            }
-        } catch (Throwable t) {
-            showFatalError("Ошибка: " + t.getMessage());
-        }
-    }
-
-    private void showSearch() {
-        try {
-            searchForm = new Form("Поиск");
-            searchText = new TextField("Название:", "", 40, TextField.ANY);
-            searchForm.append(searchText);
-            searchForm.addCommand(searchCommand);
-            searchForm.addCommand(backCommand);
-            searchForm.setCommandListener(this);
-            display.setCurrent(searchForm);
-        } catch (Throwable t) {
-            showFatalError("Ошибка поиска: " + t.getMessage());
-        }
-    }
-
-    private void loadPage(final String url) {
-        try {
-            final Form wait = new Form("Asha Store");
-            wait.append("Подключение...\n\n" + url);
-            display.setCurrent(wait);
-
-            new Thread(new Runnable() {
-                public void run() {
-                    try {
-                        String html = downloadText(url);
-                        if (html == null || html.length() == 0) {
-                            showOffline();
-                            return;
-                        }
-                        showResults(html);
-                    } catch (Throwable e) {
-                        showOffline();
-                    }
-                }
-            }).start();
-        } catch (Throwable t) {
-            showOffline();
-        }
-    }
-
-    private String downloadText(String url) throws Exception {
-        HttpConnection con = null;
-        InputStream in = null;
-        ByteArrayOutputStream out = null;
-
-        try {
-            con = (HttpConnection) Connector.open(url, Connector.READ, true);
-            con.setRequestMethod(HttpConnection.GET);
-
-            int code = con.getResponseCode();
-            if (code != HttpConnection.HTTP_OK) {
-                return null;
-            }
-
-            in = con.openInputStream();
-            out = new ByteArrayOutputStream();
-
-            byte[] buffer = new byte[256];
-            int count;
-
-            while ((count = in.read(buffer)) != -1) {
-                out.write(buffer, 0, count);
-            }
-
-            byte[] data = out.toByteArray();
-            try {
-                return new String(data, "UTF-8");
-            } catch (Exception e) {
-                return new String(data);
-            }
-
-        } finally {
-            if (out != null) {
-                try { out.close(); } catch (Exception e) {}
-            }
-            if (in != null) {
-                try { in.close(); } catch (Exception e) {}
-            }
-            if (con != null) {
-                try { con.close(); } catch (Exception e) {}
-            }
-        }
-    }
-
-    private void showResults(String html) {
-        try {
-            resultsList = new List("Asha Store", List.IMPLICIT);
-            Vector names = new Vector();
-
-            int pos = 0;
-            while (pos < html.length()) {
-                int a = html.indexOf("<a", pos);
-                if (a == -1) break;
-
-                int b = html.indexOf(">", a);
-                if (b == -1) break;
-
-                int e = html.indexOf("</a>", b);
-                if (e == -1) break;
-
-                String text = html.substring(b + 1, e);
-                text = stripTags(text);
-                text = decode(text);
-                text = text.trim();
-
-                if (text.length() > 2 && text.length() < 70) {
-                    if (names.indexOf(text) == -1) {
-                        names.addElement(text);
-                        resultsList.append(text, null);
-                    }
-                }
-
-                pos = e + 4;
-                if (names.size() >= 25) break;
-            }
-
-            if (resultsList.size() == 0) {
-                resultsList.append("Ничего не найдено", null);
-            }
-
-            resultsList.setCommandListener(this);
-            resultsList.addCommand(backCommand);
-
-            display.setCurrent(resultsList);
-        } catch (Throwable t) {
-            showFatalError("Ошибка парсинга: " + t.getMessage());
-        }
-    }
-
-    private void showDetails(String name) {
-        try {
-            detailsForm = new Form(name);
-            detailsForm.append("Название:\n" + name + "\n\n");
-            detailsForm.append("Источник:\nseries40.kiev.ua\n");
-            detailsForm.addCommand(detailsBackCommand);
-            detailsForm.setCommandListener(this);
-
-            display.setCurrent(detailsForm);
-        } catch (Throwable t) {
-            showFatalError("Ошибка описания: " + t.getMessage());
-        }
-    }
-
-    private String stripTags(String s) {
-        if (s == null) return "";
-        StringBuffer r = new StringBuffer();
-        boolean tag = false;
-
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '<') {
-                tag = true;
-            } else if (c == '>') {
-                tag = false;
-            } else if (!tag) {
-                r.append(c);
-            }
-        }
-        return r.toString();
-    }
-
-    private String decode(String s) {
-        if (s == null) return "";
-        s = replaceAll(s, "&nbsp;", " ");
-        s = replaceAll(s, "&quot;", "\"");
-        s = replaceAll(s, "&amp;", "&");
-        s = replaceAll(s, "&lt;", "<");
-        s = replaceAll(s, "&gt;", ">");
-        return s;
-    }
-
-    private String replaceAll(String source, String pattern, String replacement) {
-        if (source == null) return "";
-        StringBuffer sb = new StringBuffer();
-        int idx = 0;
-        int patLen = pattern.length();
-        while (true) {
-            int found = source.indexOf(pattern, idx);
-            if (found == -1) {
-                sb.append(source.substring(idx));
-                break;
-            }
-            sb.append(source.substring(idx, found));
-            sb.append(replacement);
-            idx = found + patLen;
-        }
-        return sb.toString();
-    }
-
-    private String encode(String s) {
-        if (s == null) return "";
-        StringBuffer r = new StringBuffer();
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
-                r.append(c);
-            } else if (c == ' ') {
-                r.append('+');
             } else {
-                r.append('%');
-                String h = Integer.toHexString(c);
-                if (h.length() < 2) {
-                    r.append('0');
-                }
-                r.append(h);
+                display.setCurrent(mainMenuList);
             }
+        } else if (c == searchCmd) {
+            display.setCurrent(searchForm);
+        } else if (c == settingsCmd) {
+            display.setCurrent(settingsForm);
+        } else if (c == aboutCmd) {
+            display.setCurrent(aboutForm);
+        } else if (c == debugCmd) {
+            display.setCurrent(debugForm);
+        } else if (c == refreshCmd && currentCatalogUrl != null) {
+            loadUrlData(currentCatalogUrl, false);
+        } else if (c == executeSearchCmd && d == searchForm) {
+            executeSearch();
+        } else if (c == downloadCmd && d == detailForm) {
+            startDownload();
+        } else if (d == mainMenuList && c == List.SELECT_COMMAND) {
+            int selected = mainMenuList.getSelectedIndex();
+            switch (selected) {
+                case 0:
+                    loadUrlData(baseUrl, false);
+                    break;
+                case 1:
+                    StringBuffer gamesSb = new StringBuffer();
+                    gamesSb.append(baseUrl);
+                    gamesSb.append("games");
+                    loadUrlData(gamesSb.toString(), false);
+                    break;
+                case 2:
+                    StringBuffer themesSb = new StringBuffer();
+                    themesSb.append(baseUrl);
+                    themesSb.append("themes");
+                    loadUrlData(themesSb.toString(), false);
+                    break;
+                case 3:
+                    StringBuffer newSb = new StringBuffer();
+                    newSb.append(baseUrl);
+                    newSb.append("new");
+                    loadUrlData(newSb.toString(), false);
+                    break;
+                case 4:
+                    display.setCurrent(searchForm);
+                    break;
+                case 5:
+                    display.setCurrent(settingsForm);
+                    break;
+                case 6:
+                    display.setCurrent(aboutForm);
+                    break;
+                case 7:
+                    display.setCurrent(debugForm);
+                    break;
+            }
+        } else if (d == catalogList && c == List.SELECT_COMMAND) {
+            int selected = catalogList.getSelectedIndex();
+            openAppDetails(selected);
         }
-        return r.toString();
-    }
-
-    private void showOffline() {
-        try {
-            Alert a = new Alert("Ошибка сети", "Нет интернет-соединения.", null, AlertType.ERROR);
-            a.setTimeout(Alert.FOREVER);
-            display.setCurrent(a, main);
-        } catch (Throwable t) {}
-    }
-
-    private void showFatalError(String msg) {
-        try {
-            Alert a = new Alert("Сбой", msg, null, AlertType.ERROR);
-            a.setTimeout(Alert.FOREVER);
-            if (display != null) {
-                display.setCurrent(a);
-            }
-        } catch (Throwable t) {}
     }
 }
