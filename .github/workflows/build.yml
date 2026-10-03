@@ -1,56 +1,4 @@
-name: AshaStore
-
-on:
-  push:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java 8 environment
-        uses: actions/setup-java@v4
-        with:
-          java-version: '8'
-          distribution: 'temurin'
-
-      - name: Check repository structure and files
-        run: |
-          echo "=== Root Directory Contents ==="
-          ls -la
-          echo "=== Checking META-INF directory ==="
-          ls -la META-INF/ || echo "META-INF directory not found"
-
-      - name: Verify Manifest file existence
-        run: |
-          if [ -f "META-INF/MANIFEST.MF" ]; then
-            echo "MANIFEST.MF found successfully."
-          else
-            echo "Error: MANIFEST.MF not found!"
-            exit 1
-          fi
-
-      - name: Prepare local build environment and download J2ME API
-        run: |
-          mkdir -p build/classes
-          wget https://repo1.maven.org/maven2/org/microemu/microemulator/2.0.4/microemulator-2.0.4.jar -O j2me-api.jar
-          echo "Local environment and J2ME API ready."
-
-      - name: Verify source file existence
-        run: |
-          if [ -f "AshaStore.java" ]; then
-            echo "AshaStore.java found."
-          else
-            echo "Error: AshaStore.java not found in root!"
-            exit 1
-          fi
-
-      - name: Compile AshaStore.java source code
+- name: Compile AshaStore.java source code
         run: |
           javac -source 1.6 -target 1.6 -cp j2me-api.jar -d build/classes AshaStore.java
 
@@ -58,12 +6,17 @@ jobs:
         run: |
           jar cvfm AshaStore.jar META-INF/MANIFEST.MF -C build/classes .
 
-      - name: Verify resulting JAR archive contents
+      - name: Generate correct JAD descriptor
         run: |
-          jar tf AshaStore.jar
+          JAR_SIZE=$(stat -c%s AshaStore.jar)
+          cp META-INF/MANIFEST.MF AshaStore.jad
+          echo "MIDlet-Jar-Size: $JAR_SIZE" >> AshaStore.jad
+          echo "MIDlet-Jar-URL: AshaStore.jar" >> AshaStore.jad
 
-      - name: Upload built artifact to GitHub
+      - name: Upload built artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: AshaStore-JAR
-          path: AshaStore.jar
+          name: AshaStore-Package
+          path: |
+            AshaStore.jar
+            AshaStore.jad
