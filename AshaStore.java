@@ -10,7 +10,6 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private List mainMenuList;
     private List catalogList;
     private Form detailForm;
-    private Form settingsForm;
     private Form aboutForm;
 
     private String[] itemUrls;
@@ -34,7 +33,6 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
         }
 
         if (mainMenuList == null) {
-            // URL страницы каталога
             targetUrl = "http://series40.kiev.ua/";
 
             itemUrls = new String[50];
@@ -44,7 +42,9 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
             initMainMenu();
         }
 
-        display.setCurrent(mainMenuList);
+        if (display != null) {
+            display.setCurrent(mainMenuList);
+        }
     }
 
     protected void pauseApp() {
@@ -63,16 +63,15 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private void initMainMenu() {
         mainMenuList = new List("Asha Store", List.IMPLICIT);
 
-        mainMenuList.append("Каталог (Динамический)", null);
+        mainMenuList.append("Каталог", null);
         mainMenuList.append("О программе", null);
 
         mainMenuList.addCommand(exitCmd);
         mainMenuList.setCommandListener(this);
     }
 
-    // Старт загрузки HTML в фоновом потоке
     private void startCatalogLoading() {
-        Alert loadingAlert = new Alert("Загрузка", "Подключение к " + targetUrl + "...", null, AlertType.INFO);
+        Alert loadingAlert = new Alert("Загрузка", "Подключение к серверу...", null, AlertType.INFO);
         loadingAlert.setTimeout(Alert.FOREVER);
         display.setCurrent(loadingAlert);
 
@@ -80,106 +79,128 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
         thread.start();
     }
 
-    // Фоновая загрузка HTML-кода и его разбор
     public void run() {
         HttpConnection conn = null;
         InputStream is = null;
 
         try {
-            conn = (HttpConnection) Connector.open(targetUrl);
+            conn = (HttpConnection) Connector.open(targetUrl, Connector.READ, true);
             conn.setRequestMethod(HttpConnection.GET);
 
-            if (conn.getResponseCode() == HttpConnection.HTTP_OK) {
+            int responseCode = conn.getResponseCode();
+
+            if (responseCode == HttpConnection.HTTP_OK) {
                 is = conn.openInputStream();
-                
+
                 StringBuffer htmlBuffer = new StringBuffer();
                 int ch;
-                // Читаем первые 30 КБ данных, чтобы не перегрузить память телефона
                 int bytesRead = 0;
-                while ((ch = is.read()) != -1 && bytesRead < 30000) {
+
+                // Читаем не более 20 КБ для защиты Heap на Asha 501
+                while ((ch = is.read()) != -1 && bytesRead < 20000) {
                     htmlBuffer.append((char) ch);
                     bytesRead++;
                 }
 
-                parseHtmlAndBuildCatalog(htmlBuffer.toString());
+                final String html = htmlBuffer.toString();
+                htmlBuffer = null;
+                System.gc();
+
+                display.callSerially(new Runnable() {
+                    public void run() {
+                        parseHtmlAndBuildCatalog(html);
+                    }
+                });
+
             } else {
-                showInfo("Ошибка", "Сервер вернул код: " + conn.getResponseCode());
+                final int code = responseCode;
+                display.callSerially(new Runnable() {
+                    public void run() {
+                        showInfo("Ошибка", "Код ответа сервера: " + code);
+                    }
+                });
             }
-        } catch (Exception e) {
-            showInfo("Ошибка сети", "Не удалось загрузить страницу.\nПроверьте подключение.");
+        } catch (Throwable t) {
+            display.callSerially(new Runnable() {
+                public void run() {
+                    showInfo("Ошибка сети", "Не удалось загрузить данные.");
+                }
+            });
         } finally {
-            try {
-                if (is != null) is.close();
-                if (conn != null) conn.close();
-            } catch (Exception e) {}
+            if (is != null) {
+                try {
+                    is.close();
+                } catch (Exception e) {}
+            }
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (Exception e) {}
+            }
         }
     }
 
-    // Динамический поиск тегов <a href="..."> в HTML
     private void parseHtmlAndBuildCatalog(String html) {
         catalogList = new List("Каталог", List.IMPLICIT);
         itemCount = 0;
 
-        String lowerHtml = html.toLowerCase();
-        int cursor = 0;
+        if (html != null) {
+            String lowerHtml = html.toLowerCase();
+            int cursor = 0;
 
-        while (itemCount < itemNames.length) {
-            // Ищем теги ссылок <a href=
-            int hrefIndex = lowerHtml.indexOf("href=", cursor);
-            if (hrefIndex == -1) {
-                break;
-            }
+            while (itemCount < itemNames.length) {
+                int hrefIndex = lowerHtml.indexOf("href=", cursor);
+                if (hrefIndex == -1) {
+                    break;
+                }
 
-            int quoteStart = lowerHtml.indexOf("\"", hrefIndex);
-            if (quoteStart == -1 || quoteStart > hrefIndex + 10) {
-                cursor = hrefIndex + 5;
-                continue;
-            }
+                int quoteStart = lowerHtml.indexOf("\"", hrefIndex);
+                if (quoteStart == -1 || quoteStart > hrefIndex + 10) {
+                    cursor = hrefIndex + 5;
+                    continue;
+                }
 
-            int quoteEnd = lowerHtml.indexOf("\"", quoteStart + 1);
-            if (quoteEnd == -1) {
-                cursor = hrefIndex + 5;
-                continue;
-            }
+                int quoteEnd = lowerHtml.indexOf("\"", quoteStart + 1);
+                if (quoteEnd == -1) {
+                    cursor = hrefIndex + 5;
+                    continue;
+                }
 
-            // Извлекаем URL из кавычек
-            String link = html.substring(quoteStart + 1, quoteEnd);
+                String link = html.substring(quoteStart + 1, quoteEnd);
 
-            // Ищем закрывающий тег > и </a> для получения видимого текста ссылки
-            int tagClose = lowerHtml.indexOf(">", quoteEnd);
-            int aClose = lowerHtml.indexOf("</a>", tagClose);
+                int tagClose = lowerHtml.indexOf(">", quoteEnd);
+                int aClose = lowerHtml.indexOf("</a>", tagClose);
 
-            String title = "";
-            if (tagClose != -1 && aClose != -1 && aClose > tagClose) {
-                title = html.substring(tagClose + 1, aClose).trim();
-            }
+                String title = "";
+                if (tagClose != -1 && aClose != -1 && aClose > tagClose) {
+                    title = html.substring(tagClose + 1, aClose).trim();
+                }
 
-            // Фильтруем ссылки: берем те, где есть .jad / .jar или ссылки на страницы игр
-            if (link.indexOf(".jad") != -1 || link.indexOf(".jar") != -1 || link.indexOf("game") != -1) {
-                // Если ссылка относительная, делаем её абсолютной
-                if (!link.startsWith("http://") && !link.startsWith("https://")) {
-                    if (link.startsWith("/")) {
-                        link = "http://series40.kiev.ua" + link;
-                    } else {
-                        link = "http://series40.kiev.ua/" + link;
+                if (link.indexOf(".jad") != -1 || link.indexOf(".jar") != -1) {
+                    if (!link.startsWith("http://") && !link.startsWith("https://")) {
+                        if (link.startsWith("/")) {
+                            link = "http://series40.kiev.ua" + link;
+                        } else {
+                            link = "http://series40.kiev.ua/" + link;
+                        }
                     }
+
+                    if (title.length() == 0) {
+                        title = "Файл #" + (itemCount + 1);
+                    }
+
+                    itemNames[itemCount] = title;
+                    itemUrls[itemCount] = link;
+                    catalogList.append(title, null);
+                    itemCount++;
                 }
 
-                if (title.length() == 0) {
-                    title = "Файл #" + (itemCount + 1);
-                }
-
-                itemNames[itemCount] = title;
-                itemUrls[itemCount] = link;
-                catalogList.append(title, null);
-                itemCount++;
+                cursor = quoteEnd + 1;
             }
-
-            cursor = quoteEnd + 1;
         }
 
         if (itemCount == 0) {
-            catalogList.append("Записи не найдены", null);
+            catalogList.append("Файлы не найдены", null);
         }
 
         catalogList.addCommand(backCmd);
@@ -194,15 +215,10 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
             return;
         }
 
-        detailForm = new Form("Детали");
+        detailForm = new Form("Приложение");
 
-        detailForm.append(
-            new StringItem("Название:", itemNames[index])
-        );
-
-        detailForm.append(
-            new StringItem("Ссылка:", itemUrls[index])
-        );
+        detailForm.append(new StringItem("Название:", itemNames[index]));
+        detailForm.append(new StringItem("URL:", itemUrls[index]));
 
         selectedDownloadUrl = itemUrls[index];
 
@@ -219,13 +235,12 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
         }
 
         try {
-            // Передаём ссылку родному браузеру Nokia Asha 501
             boolean isClosed = platformRequest(selectedDownloadUrl);
             if (isClosed) {
                 notifyDestroyed();
             }
         } catch (Exception e) {
-            showInfo("Ошибка", "Не удалось запустить скачивание.");
+            showInfo("Ошибка", "Не удалось запустить браузер.");
         }
     }
 
@@ -276,7 +291,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
 
     private void showAbout() {
         aboutForm = new Form("О программе");
-        aboutForm.append(new StringItem(null, "Asha Store 1.2\nДинамический парсер"));
+        aboutForm.append(new StringItem(null, "Asha Store 1.2\nКлиент каталога"));
         aboutForm.addCommand(backCmd);
         aboutForm.setCommandListener(this);
         display.setCurrent(aboutForm);
