@@ -25,6 +25,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private Command refreshCmd;
 
     public AshaStore() {
+        // Конструктор остается пустым для безопасной инициализации MIDlet
     }
 
     protected void startApp() {
@@ -96,7 +97,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                 int ch;
                 int bytesRead = 0;
 
-                // Читаем не более 20 КБ для защиты Heap на Asha 501
+                // Читаем не более 20 КБ для защиты памяти Heap
                 while ((ch = is.read()) != -1 && bytesRead < 20000) {
                     htmlBuffer.append((char) ch);
                     bytesRead++;
@@ -106,6 +107,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                 htmlBuffer = null;
                 System.gc();
 
+                // Потокобезопасный вызов обновления UI
                 display.callSerially(new Runnable() {
                     public void run() {
                         parseHtmlAndBuildCatalog(html);
