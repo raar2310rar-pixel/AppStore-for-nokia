@@ -42,7 +42,7 @@ jobs:
 
       - name: Compile AshaStore.java source code
         run: |
-          javac -source 1.6 -target 1.6 -cp j2me-api.jar -d build/classes AshaStore.java
+          javac -source 1.4 -target 1.4 -cp j2me-api.jar -d build/classes AshaStore.java
 
       - name: Build final JAR package
         run: |
@@ -52,10 +52,10 @@ jobs:
         run: |
           JAR_SIZE=$(stat -c%s AshaStore.jar)
           cp META-INF/MANIFEST.MF AshaStore.jad
-          # Удаляем возможную пустую строку в конце перед дозаписью
-          sed -i '/^$/d' AshaStore.jad
           echo "MIDlet-Jar-Size: $JAR_SIZE" >> AshaStore.jad
           echo "MIDlet-Jar-URL: AshaStore.jar" >> AshaStore.jad
+          # Гарантируем пустую строку в конце файла для Asha OS
+          echo "" >> AshaStore.jad
           dos2unix AshaStore.jad
 
       - name: Upload built artifacts to GitHub
