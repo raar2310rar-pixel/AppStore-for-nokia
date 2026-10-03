@@ -6,7 +6,7 @@ import java.io.*;
 public class AshaStore extends MIDlet implements CommandListener {
     private Display display;
 
-    // Экраны
+    // Главные экраны UI
     private List mainMenuList;
     private List catalogList;
     private Form searchForm;
@@ -15,7 +15,7 @@ public class AshaStore extends MIDlet implements CommandListener {
     private Form aboutForm;
     private Form debugForm;
 
-    // Элементы ввода и вывода
+    // Элементы управления и текстовые поля
     private TextField searchInput;
     private StringItem statusLabel;
     private StringItem appTitleLabel;
@@ -23,7 +23,7 @@ public class AshaStore extends MIDlet implements CommandListener {
     private StringItem appUrlLabel;
     private StringItem debugText;
 
-    // Команды
+    // Команды навигации
     private Command exitCmd;
     private Command backCmd;
     private Command selectCmd;
@@ -35,35 +35,43 @@ public class AshaStore extends MIDlet implements CommandListener {
     private Command debugCmd;
     private Command refreshCmd;
 
-    // Данные и состояние
+    // Переменные состояния и хранилище данных
     private String baseUrl;
     private String currentCatalogUrl;
     private String selectedDownloadUrl;
     private String[] itemUrls;
     private String[] itemNames;
     private int itemCount;
-    private int currentPage;
 
     public AshaStore() {
-        baseUrl = "http://series40.kiev.ua/";
-        itemUrls = new String[100];
-        itemNames = new String[100];
-        itemCount = 0;
-        currentPage = 1;
+        // Конструктор максимально пустой, чтобы KVM не падала при загрузке класса
     }
 
     protected void startApp() {
         if (display == null) {
-            display = Display.getDisplay(this);
-            initCommands();
-            initMainMenu();
-            initSearchForm();
-            initDetailForm();
-            initSettingsForm();
-            initAboutForm();
-            initDebugForm();
-            
-            display.setCurrent(mainMenuList);
+            try {
+                display = Display.getDisplay(this);
+
+                // Инициализация базовых переменных
+                baseUrl = "http://series40.kiev.ua/";
+                itemUrls = new String[40];
+                itemNames = new String[40];
+                itemCount = 0;
+
+                // Создание команд и UI
+                initCommands();
+                initMainMenu();
+                initSearchForm();
+                initDetailForm();
+                initSettingsForm();
+                initAboutForm();
+                initDebugForm();
+
+                display.setCurrent(mainMenuList);
+            } catch (Throwable t) {
+                // Если произошел сбой при создании UI, выводим критическую форму
+                showFatalError(t);
+            }
         }
     }
 
@@ -89,7 +97,7 @@ public class AshaStore extends MIDlet implements CommandListener {
         mainMenuList.append("Поиск", null);
         mainMenuList.append("Настройки", null);
         mainMenuList.append("О программе", null);
-        mainMenuList.append("Отладка", null);
+        mainMenuList.append("Системный лог", null);
 
         mainMenuList.addCommand(exitCmd);
         mainMenuList.addCommand(searchCmd);
@@ -99,17 +107,17 @@ public class AshaStore extends MIDlet implements CommandListener {
     }
 
     private void initSearchForm() {
-        searchForm = new Form("Поиск в Store");
-        searchInput = new TextField("Введите запрос:", "", 32, TextField.ANY);
+        searchForm = new Form("Поиск приложений");
+        searchInput = new TextField("Запрос:", "", 32, TextField.ANY);
         searchForm.append(searchInput);
-        
+
         searchForm.addCommand(executeSearchCmd);
         searchForm.addCommand(backCmd);
         searchForm.setCommandListener(this);
     }
 
     private void initDetailForm() {
-        detailForm = new Form("Информация");
+        detailForm = new Form("Карточка программы");
         statusLabel = new StringItem("Статус: ", "Готово");
         appTitleLabel = new StringItem("Название: ", "");
         appDescLabel = new StringItem("Описание: ", "");
@@ -127,35 +135,41 @@ public class AshaStore extends MIDlet implements CommandListener {
 
     private void initSettingsForm() {
         settingsForm = new Form("Настройки");
-        StringItem info = new StringItem("Сервер: ", baseUrl);
-        StringItem userAgent = new StringItem("User-Agent: ", "NokiaS40/AshaStore");
+        StringItem info = new StringItem("Сервер базы: ", baseUrl);
+        StringItem platform = new StringItem("Платформа: ", "Nokia Asha Platform 14.0.4");
         settingsForm.append(info);
-        settingsForm.append(userAgent);
+        settingsForm.append(platform);
         settingsForm.addCommand(backCmd);
         settingsForm.setCommandListener(this);
     }
 
     private void initAboutForm() {
         aboutForm = new Form("О программе");
-        aboutForm.append(new StringItem("Asha Store", "Клиент каталога для Nokia S40\nВерсия: 1.0.0\nПлатформа: MIDP 2.1 / CLDC 1.1"));
+        aboutForm.append(new StringItem("Asha Store", "Клиент каталога для Nokia Asha 512\nВерсия: 1.0.0\nПлатформа: MIDP 2.1 / CLDC 1.1"));
         aboutForm.addCommand(backCmd);
         aboutForm.setCommandListener(this);
     }
 
     private void initDebugForm() {
-        debugForm = new Form("Системный лог");
-        debugText = new StringItem("Лог: ", "Запуск системы прошел успешно.\n");
+        debugForm = new Form("Отладчик");
+        debugText = new StringItem("Статус: ", "Система инициализирована без ошибок.\n");
         debugForm.append(debugText);
         debugForm.addCommand(backCmd);
         debugForm.setCommandListener(this);
     }
 
-    private void logDebug(String message) {
-        StringBuffer sb = new StringBuffer();
-        sb.append(debugText.getText());
-        sb.append("\n> ");
-        sb.append(message);
-        debugText.setText(sb.toString());
+    private void appendLog(final String msg) {
+        display.callSerially(new Runnable() {
+            public void run() {
+                if (debugText != null) {
+                    StringBuffer sb = new StringBuffer();
+                    sb.append(debugText.getText());
+                    sb.append("\n> ");
+                    sb.append(msg);
+                    debugText.setText(sb.toString());
+                }
+            }
+        });
     }
 
     private void loadUrlData(final String requestUrl, final boolean isSearch) {
@@ -167,8 +181,7 @@ public class AshaStore extends MIDlet implements CommandListener {
         catalogList.setCommandListener(this);
         display.setCurrent(catalogList);
 
-        logDebug("Запрос: ");
-        logDebug(requestUrl);
+        appendLog("Запрос сети...");
 
         new Thread(new Runnable() {
             public void run() {
@@ -177,44 +190,54 @@ public class AshaStore extends MIDlet implements CommandListener {
                 try {
                     conn = (HttpConnection) Connector.open(requestUrl);
                     conn.setRequestMethod(HttpConnection.GET);
-                    conn.setRequestProperty("User-Agent", "NokiaS40/AshaStore");
+                    conn.setRequestProperty("User-Agent", "NokiaAsha512/14.0.4");
 
                     int responseCode = conn.getResponseCode();
-                    logDebug("Ответ от сервера получен.");
 
                     if (responseCode == HttpConnection.HTTP_OK) {
                         is = conn.openInputStream();
                         StringBuffer sb = new StringBuffer();
                         int ch;
                         int readLimit = 0;
-                        while ((ch = is.read()) != -1 && readLimit < 64000) {
+                        // Безопасный размер чтения под Heap Asha 512
+                        while ((ch = is.read()) != -1 && readLimit < 24000) {
                             sb.append((char) ch);
                             readLimit++;
                         }
-                        
-                        logDebug("Размер полученных данных обработан.");
-                        if (isSearch) {
-                            parseSearchResults(sb.toString());
-                        } else {
-                            parseCatalogHtml(sb.toString());
-                        }
+
+                        final String htmlData = sb.toString();
+                        display.callSerially(new Runnable() {
+                            public void run() {
+                                if (isSearch) {
+                                    parseSearchResults(htmlData);
+                                } else {
+                                    parseCatalogHtml(htmlData);
+                                }
+                            }
+                        });
                     } else {
-                        StringBuffer errSb = new StringBuffer();
-                        errSb.append("Ошибка сервера: ");
+                        final StringBuffer errSb = new StringBuffer();
+                        errSb.append("Сервер ответил кодом: ");
                         errSb.append(responseCode);
-                        logDebug(errSb.toString());
-                        showErrorScreen(errSb.toString());
+                        display.callSerially(new Runnable() {
+                            public void run() {
+                                showErrorScreen(errSb.toString());
+                            }
+                        });
                     }
                 } catch (Throwable t) {
-                    StringBuffer tSb = new StringBuffer();
-                    tSb.append("Ошибка подключения: ");
+                    final StringBuffer tSb = new StringBuffer();
+                    tSb.append("Ошибка сети: ");
                     if (t.getMessage() != null) {
                         tSb.append(t.getMessage());
                     } else {
                         tSb.append(t.getClass().getName());
                     }
-                    logDebug(tSb.toString());
-                    showErrorScreen(tSb.toString());
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            showErrorScreen(tSb.toString());
+                        }
+                    });
                 } finally {
                     try {
                         if (is != null) is.close();
@@ -238,9 +261,9 @@ public class AshaStore extends MIDlet implements CommandListener {
 
             if (startUrl > 0 && endUrl > startUrl && startText > 0 && endText > startText) {
                 String link = html.substring(startUrl, endUrl).trim();
-                String title = cleanHtmlTags(html.substring(startText, endText).trim());
+                String title = stripTags(html.substring(startText, endText).trim());
 
-                if (title.length() > 0 && itemCount < 100) {
+                if (title.length() > 0 && itemCount < 40) {
                     itemUrls[itemCount] = link;
                     itemNames[itemCount] = title;
                     catalogList.append(title, null);
@@ -248,7 +271,7 @@ public class AshaStore extends MIDlet implements CommandListener {
                 }
             }
             index = endText + 4;
-            if (itemCount >= 100) break;
+            if (itemCount >= 40) break;
         }
 
         if (catalogList.size() == 0) {
@@ -256,7 +279,7 @@ public class AshaStore extends MIDlet implements CommandListener {
         }
     }
 
-    private String cleanHtmlTags(String input) {
+    private String stripTags(String input) {
         StringBuffer clean = new StringBuffer();
         boolean inTag = false;
         for (int i = 0; i < input.length(); i++) {
@@ -284,7 +307,7 @@ public class AshaStore extends MIDlet implements CommandListener {
             searchUrlSb.append(baseUrl);
             searchUrlSb.append("search?q=");
             searchUrlSb.append(query);
-            
+
             loadUrlData(searchUrlSb.toString(), true);
         }
     }
@@ -295,9 +318,9 @@ public class AshaStore extends MIDlet implements CommandListener {
             selectedDownloadUrl = itemUrls[index];
 
             appTitleLabel.setText(title);
-            appDescLabel.setText("Объект из базы данных Asha Store.");
+            appDescLabel.setText("Выбран объект из базы данных Asha Store.");
             appUrlLabel.setText(selectedDownloadUrl);
-            statusLabel.setText("Готов к скачиванию");
+            statusLabel.setText("Готов к передаче");
 
             display.setCurrent(detailForm);
         }
@@ -315,16 +338,13 @@ public class AshaStore extends MIDlet implements CommandListener {
                 }
                 targetUrl.append(selectedDownloadUrl);
 
-                logDebug("Передача в браузер: ");
-                logDebug(targetUrl.toString());
-
+                appendLog("Вызов передачи в браузер...");
                 platformRequest(targetUrl.toString());
             } catch (Exception e) {
                 StringBuffer errSb = new StringBuffer();
-                errSb.append("Сбой передачи: ");
+                errSb.append("Ошибка вызова браузера: ");
                 errSb.append(e.getMessage());
                 statusLabel.setText(errSb.toString());
-                logDebug(errSb.toString());
             }
         }
     }
@@ -333,6 +353,21 @@ public class AshaStore extends MIDlet implements CommandListener {
         Form errForm = new Form("Ошибка");
         errForm.append(new StringItem("Детали: ", message));
         errForm.addCommand(backCmd);
+        errForm.setCommandListener(this);
+        display.setCurrent(errForm);
+    }
+
+    private void showFatalError(Throwable t) {
+        Form errForm = new Form("Ошибка запуска");
+        StringBuffer errSb = new StringBuffer();
+        errSb.append("Сбой инициализации: ");
+        if (t.getMessage() != null) {
+            errSb.append(t.getMessage());
+        } else {
+            errSb.append(t.getClass().getName());
+        }
+        errForm.append(new StringItem("Детали: ", errSb.toString()));
+        errForm.addCommand(exitCmd);
         errForm.setCommandListener(this);
         display.setCurrent(errForm);
     }
