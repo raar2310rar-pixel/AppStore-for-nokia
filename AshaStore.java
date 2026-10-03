@@ -3,7 +3,7 @@ import javax.microedition.lcdui.*;
 import javax.microedition.io.*;
 import java.io.*;
 
-public class AshaStore extends MIDlet implements CommandListener {
+public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private Display display;
 
     // Главные экраны UI
@@ -44,34 +44,47 @@ public class AshaStore extends MIDlet implements CommandListener {
     private int itemCount;
 
     public AshaStore() {
-        // Конструктор максимально пустой, чтобы KVM не падала при загрузке класса
     }
 
     protected void startApp() {
         if (display == null) {
-            try {
-                display = Display.getDisplay(this);
+            display = Display.getDisplay(this);
+            
+            // 1. Показываем заглушку моментально, чтобы телефон не решил, что приложение зависло
+            Form splash = new Form("Запуск");
+            splash.append("Инициализация интерфейса...");
+            display.setCurrent(splash);
+            
+            // 2. Отправляем тяжелую сборку окон в фоновый поток
+            Thread initThread = new Thread(this);
+            initThread.start();
+        }
+    }
 
-                // Инициализация базовых переменных
-                baseUrl = "http://series40.kiev.ua/";
-                itemUrls = new String[40];
-                itemNames = new String[40];
-                itemCount = 0;
+    // Этот метод выполнится в фоне, не блокируя систему телефона
+    public void run() {
+        try {
+            baseUrl = "http://series40.kiev.ua/";
+            itemUrls = new String[40];
+            itemNames = new String[40];
+            itemCount = 0;
 
-                // Создание команд и UI
-                initCommands();
-                initMainMenu();
-                initSearchForm();
-                initDetailForm();
-                initSettingsForm();
-                initAboutForm();
-                initDebugForm();
+            initCommands();
+            initMainMenu();
+            initSearchForm();
+            initDetailForm();
+            initSettingsForm();
+            initAboutForm();
+            initDebugForm();
 
-                display.setCurrent(mainMenuList);
-            } catch (Throwable t) {
-                // Если произошел сбой при создании UI, выводим критическую форму
-                showFatalError(t);
-            }
+            // 3. Когда всё готово, безопасно переключаем экран на главное меню
+            display.callSerially(new Runnable() {
+                public void run() {
+                    display.setCurrent(mainMenuList);
+                }
+            });
+        } catch (Throwable t) {
+            showFatalError(t);
         }
     }
 
@@ -135,17 +148,26 @@ public class AshaStore extends MIDlet implements CommandListener {
 
     private void initSettingsForm() {
         settingsForm = new Form("Настройки");
-        StringItem info = new StringItem("Сервер базы: ", baseUrl);
-        StringItem platform = new StringItem("Платформа: ", "Nokia Asha Platform 14.0.4");
-        settingsForm.append(info);
-        settingsForm.append(platform);
+        settingsForm.append(new StringItem("Сервер базы: ", baseUrl));
+        settingsForm.append(new StringItem("Платформа: ", "Nokia Asha Platform 14.0.4"));
         settingsForm.addCommand(backCmd);
         settingsForm.setCommandListener(this);
     }
 
     private void initAboutForm() {
         aboutForm = new Form("О программе");
-        aboutForm.append(new StringItem("Asha Store", "Клиент каталога для Nokia Asha 512\nВерсия: 1.0.0\nПлатформа: MIDP 2.1 / CLDC 1.1"));
+        
+        String version = getAppProperty("MIDlet-Version");
+        if (version == null || version.trim().length() == 0) {
+            version = "1.01.1";
+        }
+        
+        StringBuffer aboutText = new StringBuffer();
+        aboutText.append("Клиент каталога для Nokia Asha\nВерсия: ");
+        aboutText.append(version);
+        aboutText.append("\nПлатформа: MIDP 2.1 / CLDC 1.1");
+        
+        aboutForm.append(new StringItem("Asha Store", aboutText.toString()));
         aboutForm.addCommand(backCmd);
         aboutForm.setCommandListener(this);
     }
@@ -190,7 +212,7 @@ public class AshaStore extends MIDlet implements CommandListener {
                 try {
                     conn = (HttpConnection) Connector.open(requestUrl);
                     conn.setRequestMethod(HttpConnection.GET);
-                    conn.setRequestProperty("User-Agent", "NokiaAsha512/14.0.4");
+                    conn.setRequestProperty("User-Agent", "NokiaAsha");
 
                     int responseCode = conn.getResponseCode();
 
@@ -199,7 +221,6 @@ public class AshaStore extends MIDlet implements CommandListener {
                         StringBuffer sb = new StringBuffer();
                         int ch;
                         int readLimit = 0;
-                        // Безопасный размер чтения под Heap Asha 512
                         while ((ch = is.read()) != -1 && readLimit < 24000) {
                             sb.append((char) ch);
                             readLimit++;
@@ -358,7 +379,7 @@ public class AshaStore extends MIDlet implements CommandListener {
     }
 
     private void showFatalError(Throwable t) {
-        Form errForm = new Form("Ошибка запуска");
+        final Form errForm = new Form("Ошибка запуска");
         StringBuffer errSb = new StringBuffer();
         errSb.append("Сбой инициализации: ");
         if (t.getMessage() != null) {
@@ -369,7 +390,12 @@ public class AshaStore extends MIDlet implements CommandListener {
         errForm.append(new StringItem("Детали: ", errSb.toString()));
         errForm.addCommand(exitCmd);
         errForm.setCommandListener(this);
-        display.setCurrent(errForm);
+        
+        display.callSerially(new Runnable() {
+            public void run() {
+                display.setCurrent(errForm);
+            }
+        });
     }
 
     protected void pauseApp() {}
