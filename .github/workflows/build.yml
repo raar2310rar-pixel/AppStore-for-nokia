@@ -7,67 +7,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Дает права на создание релизов и загрузку файлов
 
     steps:
       - name: Получить исходники
         uses: actions/checkout@v4
 
-      - name: Установить Java 8
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '8'
-
-      - name: Скачать J2ME API
-        run: |
-          mkdir -p lib
-          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar
-          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar
-
-      - name: Подготовить структуру
-        run: |
-          mkdir -p bin dist src
-          find . -maxdepth 2 -name "AshaStore.java" -exec cp {} src/ \;
-
-      - name: Очистить код от разметки
-        run: |
-          sed -i 's/```java//gI' src/*.java
-          sed -i 's/```//g' src/*.java
-          sed -i 's/`//g' src/*.java
-          sed -i 's/\xA0/ /g' src/*.java
-          sed -i '/^[[:space:]]*java[[:space:]]*$/d' src/*.java
-
-      - name: Компиляция Java
-        run: |
-          javac -source 1.7 -target 1.7 -cp "lib/midpapi20.jar:lib/cldcapi11.jar" -d bin src/*.java
-
-      - name: Упаковка JAR и генерация JAD
-        run: |
-          mkdir -p bin/META-INF
-          {
-            echo "Manifest-Version: 1.0"
-            echo "MIDlet-1: Asha Store,,AshaStore"
-            echo "MIDlet-Name: Asha Store"
-            echo "MIDlet-Vendor: Asha Store"
-            echo "MIDlet-Version: 1.0.0"
-            echo "MicroEdition-Configuration: CLDC-1.1"
-            echo "MicroEdition-Profile: MIDP-2.1"
-          } > bin/META-INF/MANIFEST.MF
-          
-          jar cfm dist/AshaStore.jar bin/META-INF/MANIFEST.MF -C bin .
-          
-          # Генерация .jad файла с рассчетом размера .jar
-          JAR_SIZE=$(stat -c%s dist/AshaStore.jar)
-          {
-            echo "MIDlet-1: Asha Store,,AshaStore"
-            echo "MIDlet-Name: Asha Store"
-            echo "MIDlet-Vendor: Asha Store"
-            echo "MIDlet-Version: 1.0.0"
-            echo "MicroEdition-Configuration: CLDC-1.1"
-            echo "MicroEdition-Profile: MIDP-2.1"
-            echo "MIDlet-Jar-URL: AshaStore.jar"
-            echo "MIDlet-Jar-Size: $JAR_SIZE"
-          } > dist/AshaStore.jad
+      # ... все остальные ваши шаги (Java, сборка, JAD) ...
 
       - name: Опубликовать релиз
         uses: softprops/action-gh-release@v1
