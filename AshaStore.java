@@ -24,27 +24,33 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private Command downloadCmd;
     private Command refreshCmd;
 
+    private boolean isInitialized = false;
+
     public AshaStore() {
-        // Конструктор остается пустым для безопасной инициализации MIDlet
     }
 
     protected void startApp() {
-        if (display == null) {
-            display = Display.getDisplay(this);
-        }
+        try {
+            if (display == null) {
+                display = Display.getDisplay(this);
+            }
 
-        if (mainMenuList == null) {
-            targetUrl = "http://series40.kiev.ua/";
+            if (!isInitialized) {
+                targetUrl = "http://series40.kiev.ua/";
 
-            itemUrls = new String[50];
-            itemNames = new String[50];
+                itemUrls = new String[50];
+                itemNames = new String[50];
 
-            initCommands();
-            initMainMenu();
-        }
+                initCommands();
+                initMainMenu();
+                isInitialized = true;
+            }
 
-        if (display != null) {
-            display.setCurrent(mainMenuList);
+            if (display != null && mainMenuList != null) {
+                display.setCurrent(mainMenuList);
+            }
+        } catch (Throwable t) {
+            // Предотвращаем падение при старте
         }
     }
 
@@ -72,12 +78,16 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     }
 
     private void startCatalogLoading() {
-        Alert loadingAlert = new Alert("Загрузка", "Подключение к серверу...", null, AlertType.INFO);
-        loadingAlert.setTimeout(Alert.FOREVER);
-        display.setCurrent(loadingAlert);
+        try {
+            Alert loadingAlert = new Alert("Загрузка", "Подключение к серверу...", null, AlertType.INFO);
+            loadingAlert.setTimeout(Alert.FOREVER);
+            display.setCurrent(loadingAlert);
 
-        Thread thread = new Thread(this);
-        thread.start();
+            Thread thread = new Thread(this);
+            thread.start();
+        } catch (Throwable t) {
+            showInfo("Ошибка", "Не удалось запустить загрузку.");
+        }
     }
 
     public void run() {
@@ -97,7 +107,6 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                 int ch;
                 int bytesRead = 0;
 
-                // Читаем не более 20 КБ для защиты памяти Heap
                 while ((ch = is.read()) != -1 && bytesRead < 20000) {
                     htmlBuffer.append((char) ch);
                     bytesRead++;
@@ -107,109 +116,120 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                 htmlBuffer = null;
                 System.gc();
 
-                // Потокобезопасный вызов обновления UI
-                display.callSerially(new Runnable() {
-                    public void run() {
-                        parseHtmlAndBuildCatalog(html);
-                    }
-                });
+                if (display != null) {
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            parseHtmlAndBuildCatalog(html);
+                        }
+                    });
+                }
 
             } else {
                 final int code = responseCode;
+                if (display != null) {
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            showInfo("Ошибка", "Код ответа сервера: " + code);
+                        }
+                    });
+                }
+            }
+        } catch (Throwable t) {
+            if (display != null) {
                 display.callSerially(new Runnable() {
                     public void run() {
-                        showInfo("Ошибка", "Код ответа сервера: " + code);
+                        showInfo("Ошибка сети", "Не удалось загрузить данные.");
                     }
                 });
             }
-        } catch (Throwable t) {
-            display.callSerially(new Runnable() {
-                public void run() {
-                    showInfo("Ошибка сети", "Не удалось загрузить данные.");
-                }
-            });
         } finally {
             if (is != null) {
                 try {
                     is.close();
-                } catch (Exception e) {}
+                } catch (Throwable e) {}
             }
             if (conn != null) {
                 try {
                     conn.close();
-                } catch (Exception e) {}
+                } catch (Throwable e) {}
             }
         }
     }
 
     private void parseHtmlAndBuildCatalog(String html) {
-        catalogList = new List("Каталог", List.IMPLICIT);
-        itemCount = 0;
+        try {
+            catalogList = new List("Каталог", List.IMPLICIT);
+            itemCount = 0;
 
-        if (html != null) {
-            String lowerHtml = html.toLowerCase();
-            int cursor = 0;
+            if (html != null) {
+                String lowerHtml = html.toLowerCase();
+                int cursor = 0;
 
-            while (itemCount < itemNames.length) {
-                int hrefIndex = lowerHtml.indexOf("href=", cursor);
-                if (hrefIndex == -1) {
-                    break;
-                }
+                while (itemCount < itemNames.length) {
+                    int hrefIndex = lowerHtml.indexOf("href=", cursor);
+                    if (hrefIndex == -1) {
+                        break;
+                    }
 
-                int quoteStart = lowerHtml.indexOf("\"", hrefIndex);
-                if (quoteStart == -1 || quoteStart > hrefIndex + 10) {
-                    cursor = hrefIndex + 5;
-                    continue;
-                }
+                    int quoteStart = lowerHtml.indexOf("\"", hrefIndex);
+                    if (quoteStart == -1 || quoteStart > hrefIndex + 10) {
+                        cursor = hrefIndex + 5;
+                        continue;
+                    }
 
-                int quoteEnd = lowerHtml.indexOf("\"", quoteStart + 1);
-                if (quoteEnd == -1) {
-                    cursor = hrefIndex + 5;
-                    continue;
-                }
+                    int quoteEnd = lowerHtml.indexOf("\"", quoteStart + 1);
+                    if (quoteEnd == -1) {
+                        cursor = hrefIndex + 5;
+                        continue;
+                    }
 
-                String link = html.substring(quoteStart + 1, quoteEnd);
+                    String link = html.substring(quoteStart + 1, quoteEnd);
 
-                int tagClose = lowerHtml.indexOf(">", quoteEnd);
-                int aClose = lowerHtml.indexOf("</a>", tagClose);
+                    int tagClose = lowerHtml.indexOf(">", quoteEnd);
+                    int aClose = lowerHtml.indexOf("</a>", tagClose);
 
-                String title = "";
-                if (tagClose != -1 && aClose != -1 && aClose > tagClose) {
-                    title = html.substring(tagClose + 1, aClose).trim();
-                }
+                    String title = "";
+                    if (tagClose != -1 && aClose != -1 && aClose > tagClose) {
+                        title = html.substring(tagClose + 1, aClose).trim();
+                    }
 
-                if (link.indexOf(".jad") != -1 || link.indexOf(".jar") != -1) {
-                    if (!link.startsWith("http://") && !link.startsWith("https://")) {
-                        if (link.startsWith("/")) {
-                            link = "http://series40.kiev.ua" + link;
-                        } else {
-                            link = "http://series40.kiev.ua/" + link;
+                    if (link.indexOf(".jad") != -1 || link.indexOf(".jar") != -1) {
+                        if (!link.startsWith("http://") && !link.startsWith("https://")) {
+                            if (link.startsWith("/")) {
+                                link = "http://series40.kiev.ua" + link;
+                            } else {
+                                link = "http://series40.kiev.ua/" + link;
+                            }
                         }
+
+                        if (title.length() == 0) {
+                            title = "Файл #" + (itemCount + 1);
+                        }
+
+                        itemNames[itemCount] = title;
+                        itemUrls[itemCount] = link;
+                        catalogList.append(title, null);
+                        itemCount++;
                     }
 
-                    if (title.length() == 0) {
-                        title = "Файл #" + (itemCount + 1);
-                    }
-
-                    itemNames[itemCount] = title;
-                    itemUrls[itemCount] = link;
-                    catalogList.append(title, null);
-                    itemCount++;
+                    cursor = quoteEnd + 1;
                 }
-
-                cursor = quoteEnd + 1;
             }
+
+            if (itemCount == 0) {
+                catalogList.append("Файлы не найдены", null);
+            }
+
+            catalogList.addCommand(backCmd);
+            catalogList.addCommand(refreshCmd);
+            catalogList.setCommandListener(this);
+
+            if (display != null) {
+                display.setCurrent(catalogList);
+            }
+        } catch (Throwable t) {
+            showInfo("Ошибка", "Ошибка при обработке данных.");
         }
-
-        if (itemCount == 0) {
-            catalogList.append("Файлы не найдены", null);
-        }
-
-        catalogList.addCommand(backCmd);
-        catalogList.addCommand(refreshCmd);
-        catalogList.setCommandListener(this);
-
-        display.setCurrent(catalogList);
     }
 
     private void showDetail(int index) {
@@ -217,18 +237,24 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
             return;
         }
 
-        detailForm = new Form("Приложение");
+        try {
+            detailForm = new Form("Приложение");
 
-        detailForm.append(new StringItem("Название:", itemNames[index]));
-        detailForm.append(new StringItem("URL:", itemUrls[index]));
+            detailForm.append(new StringItem("Название:", itemNames[index]));
+            detailForm.append(new StringItem("URL:", itemUrls[index]));
 
-        selectedDownloadUrl = itemUrls[index];
+            selectedDownloadUrl = itemUrls[index];
 
-        detailForm.addCommand(downloadCmd);
-        detailForm.addCommand(backCmd);
-        detailForm.setCommandListener(this);
+            detailForm.addCommand(downloadCmd);
+            detailForm.addCommand(backCmd);
+            detailForm.setCommandListener(this);
 
-        display.setCurrent(detailForm);
+            if (display != null) {
+                display.setCurrent(detailForm);
+            }
+        } catch (Throwable t) {
+            showInfo("Ошибка", "Не удалось открыть детали.");
+        }
     }
 
     private void downloadSelected() {
@@ -241,61 +267,75 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
             if (isClosed) {
                 notifyDestroyed();
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             showInfo("Ошибка", "Не удалось запустить браузер.");
         }
     }
 
     private void showInfo(String title, String message) {
-        Alert alert = new Alert(title, message, null, AlertType.INFO);
-        alert.setTimeout(Alert.FOREVER);
-        display.setCurrent(alert);
+        try {
+            Alert alert = new Alert(title, message, null, AlertType.INFO);
+            alert.setTimeout(Alert.FOREVER);
+            if (display != null) {
+                display.setCurrent(alert);
+            }
+        } catch (Throwable t) {}
     }
 
     public void commandAction(Command command, Displayable displayable) {
-        if (command == exitCmd) {
-            notifyDestroyed();
-            return;
-        }
+        try {
+            if (command == exitCmd) {
+                notifyDestroyed();
+                return;
+            }
 
-        if (command == backCmd) {
-            display.setCurrent(mainMenuList);
-            return;
-        }
+            if (command == backCmd) {
+                if (display != null && mainMenuList != null) {
+                    display.setCurrent(mainMenuList);
+                }
+                return;
+            }
 
-        if (command == downloadCmd) {
-            downloadSelected();
-            return;
-        }
+            if (command == downloadCmd) {
+                downloadSelected();
+                return;
+            }
 
-        if (command == refreshCmd) {
-            startCatalogLoading();
-            return;
-        }
-
-        if (displayable == mainMenuList && command == List.SELECT_COMMAND) {
-            int selected = mainMenuList.getSelectedIndex();
-            if (selected == 0) {
+            if (command == refreshCmd) {
                 startCatalogLoading();
-            } else if (selected == 1) {
-                showAbout();
+                return;
             }
-            return;
-        }
 
-        if (displayable == catalogList && command == List.SELECT_COMMAND) {
-            int selected = catalogList.getSelectedIndex();
-            if (selected >= 0 && selected < itemCount) {
-                showDetail(selected);
+            if (displayable == mainMenuList && command == List.SELECT_COMMAND) {
+                int selected = mainMenuList.getSelectedIndex();
+                if (selected == 0) {
+                    startCatalogLoading();
+                } else if (selected == 1) {
+                    showAbout();
+                }
+                return;
             }
+
+            if (displayable == catalogList && command == List.SELECT_COMMAND) {
+                int selected = catalogList.getSelectedIndex();
+                if (selected >= 0 && selected < itemCount) {
+                    showDetail(selected);
+                }
+            }
+        } catch (Throwable t) {
+            showInfo("Ошибка", "Сбой обработки команды.");
         }
     }
 
     private void showAbout() {
-        aboutForm = new Form("О программе");
-        aboutForm.append(new StringItem(null, "Asha Store 1.2\nКлиент каталога"));
-        aboutForm.addCommand(backCmd);
-        aboutForm.setCommandListener(this);
-        display.setCurrent(aboutForm);
+        try {
+            aboutForm = new Form("О программе");
+            aboutForm.append(new StringItem(null, "Asha Store 1.2\nКлиент каталога"));
+            aboutForm.addCommand(backCmd);
+            aboutForm.setCommandListener(this);
+            if (display != null) {
+                display.setCurrent(aboutForm);
+            }
+        } catch (Throwable t) {}
     }
 }
