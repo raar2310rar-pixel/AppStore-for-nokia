@@ -21,7 +21,6 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private StringItem appTitleLabel;
     private StringItem appDescLabel;
     private StringItem appUrlLabel;
-    private ImageItem appIconItem;
     private StringItem debugText;
 
     // Команды навигации
@@ -42,52 +41,44 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private String selectedDownloadUrl;
     private String[] itemUrls;
     private String[] itemNames;
-    private Image[] itemImages;
     private int itemCount;
+    private boolean isInitialized = false;
 
     public AshaStore() {
-        // Пустой конструктор для предотвращения OutOfMemory на старте KVM
+        // Пустой конструктор
     }
 
     protected void startApp() {
         if (display == null) {
             display = Display.getDisplay(this);
+        }
 
-            // Показываем заставку, чтобы телефон не решил, что приложение зависло
-            Form splash = new Form("Asha Store");
-            splash.append(new StringItem("", "Загрузка..."));
-            display.setCurrent(splash);
+        if (!isInitialized) {
+            try {
+                baseUrl = "http://series40.kiev.ua/";
+                itemUrls = new String[40];
+                itemNames = new String[40];
+                itemCount = 0;
 
-            // Запускаем сборку интерфейса в отдельном потоке
-            Thread initThread = new Thread(this);
-            initThread.start();
+                // Создаем UI строго в основном графическом потоке
+                initCommands();
+                initMainMenu();
+                initSearchForm();
+                initDetailForm();
+                initSettingsForm();
+                initAboutForm();
+                initDebugForm();
+
+                isInitialized = true;
+                display.setCurrent(mainMenuList);
+            } catch (Throwable t) {
+                showFatalError(t);
+            }
         }
     }
 
     public void run() {
-        try {
-            baseUrl = "http://series40.kiev.ua/";
-            itemUrls = new String[40];
-            itemNames = new String[40];
-            itemImages = new Image[40];
-            itemCount = 0;
-
-            initCommands();
-            initMainMenu();
-            initSearchForm();
-            initDetailForm();
-            initSettingsForm();
-            initAboutForm();
-            initDebugForm();
-
-            display.callSerially(new Runnable() {
-                public void run() {
-                    display.setCurrent(mainMenuList);
-                }
-            });
-        } catch (Throwable t) {
-            showFatalError(t);
-        }
+        // Резервный метод выполнения фоновых задач
     }
 
     private void initCommands() {
@@ -137,9 +128,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
         appTitleLabel = new StringItem("Название: ", "");
         appDescLabel = new StringItem("Описание: ", "");
         appUrlLabel = new StringItem("Ссылка: ", "");
-        appIconItem = new ImageItem(null, null, ImageItem.LAYOUT_CENTER, "Изображение недоступно");
 
-        detailForm.append(appIconItem);
         detailForm.append(statusLabel);
         detailForm.append(appTitleLabel);
         detailForm.append(appDescLabel);
@@ -153,7 +142,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private void initSettingsForm() {
         settingsForm = new Form("Настройки");
         settingsForm.append(new StringItem("Сервер: ", baseUrl));
-        settingsForm.append(new StringItem("Платформа: ", "Nokia Asha Platform 14.0.4"));
+        settingsForm.append(new StringItem("Платформа: ", "Nokia Asha Platform"));
         settingsForm.addCommand(backCmd);
         settingsForm.setCommandListener(this);
     }
@@ -161,7 +150,6 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     private void initAboutForm() {
         aboutForm = new Form("О программе");
 
-        // Вытягиваем версию из MANIFEST.MF
         String version = getAppProperty("MIDlet-Version");
         if (version == null || version.trim().length() == 0) {
             version = "1.01.1";
@@ -186,17 +174,19 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     }
 
     private void appendLog(final String msg) {
-        display.callSerially(new Runnable() {
-            public void run() {
-                if (debugText != null) {
-                    StringBuffer sb = new StringBuffer();
-                    sb.append(debugText.getText());
-                    sb.append("\n> ");
-                    sb.append(msg);
-                    debugText.setText(sb.toString());
+        if (display != null) {
+            display.callSerially(new Runnable() {
+                public void run() {
+                    if (debugText != null) {
+                        StringBuffer sb = new StringBuffer();
+                        sb.append(debugText.getText());
+                        sb.append("\n> ");
+                        sb.append(msg);
+                        debugText.setText(sb.toString());
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 
     private void loadUrlData(final String requestUrl, final boolean isSearch) {
@@ -263,6 +253,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
     }
 
     private void parseData(String data, boolean isSearch) {
+        if (catalogList == null) return;
         catalogList.setTitle(isSearch ? "Результаты поиска" : "Каталог");
         itemCount = 0;
 
@@ -370,11 +361,9 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
         errForm.addCommand(exitCmd);
         errForm.setCommandListener(this);
 
-        display.callSerially(new Runnable() {
-            public void run() {
-                display.setCurrent(errForm);
-            }
-        });
+        if (display != null) {
+            display.setCurrent(errForm);
+        }
     }
 
     protected void pauseApp() {}
