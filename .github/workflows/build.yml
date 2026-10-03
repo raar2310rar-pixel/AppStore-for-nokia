@@ -19,17 +19,17 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Check repository structure and files
+      - name: Fix line endings in MANIFEST.MF
         run: |
-          echo "=== Root Directory Contents ==="
-          ls -la
-          echo "=== Checking META-INF directory ==="
-          ls -la META-INF/ || echo "META-INF directory not found"
+          sudo apt-get install -y dos2unix
+          dos2unix META-INF/MANIFEST.MF
 
-      - name: Verify Manifest file existence
+      - name: Verify Manifest file existence and content
         run: |
           if [ -f "META-INF/MANIFEST.MF" ]; then
-            echo "MANIFEST.MF found successfully."
+            echo "=== MANIFEST.MF Content ==="
+            cat META-INF/MANIFEST.MF
+            echo ""
           else
             echo "Error: MANIFEST.MF not found!"
             exit 1
@@ -39,16 +39,6 @@ jobs:
         run: |
           mkdir -p build/classes
           wget https://repo1.maven.org/maven2/org/microemu/microemulator/2.0.4/microemulator-2.0.4.jar -O j2me-api.jar
-          echo "Local environment and J2ME API ready."
-
-      - name: Verify source file existence
-        run: |
-          if [ -f "AshaStore.java" ]; then
-            echo "AshaStore.java found."
-          else
-            echo "Error: AshaStore.java not found in root!"
-            exit 1
-          fi
 
       - name: Compile AshaStore.java source code
         run: |
@@ -62,8 +52,11 @@ jobs:
         run: |
           JAR_SIZE=$(stat -c%s AshaStore.jar)
           cp META-INF/MANIFEST.MF AshaStore.jad
+          # Удаляем возможную пустую строку в конце перед дозаписью
+          sed -i '/^$/d' AshaStore.jad
           echo "MIDlet-Jar-Size: $JAR_SIZE" >> AshaStore.jad
           echo "MIDlet-Jar-URL: AshaStore.jar" >> AshaStore.jad
+          dos2unix AshaStore.jad
 
       - name: Upload built artifacts to GitHub
         uses: actions/upload-artifact@v4
