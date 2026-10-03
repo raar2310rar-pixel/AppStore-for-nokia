@@ -204,16 +204,15 @@ jobs:
 
           JAR_SIZE=$(stat -c%s AshaStore.jar)
 
-          cat > AshaStore.jad <<EOF
-MIDlet-Name: AshaStore
-MIDlet-Version: 1.2
-MIDlet-Vendor: Custom
-MIDlet-1: AshaStore,,AshaStore
-MicroEdition-Configuration: CLDC-1.1
-MicroEdition-Profile: MIDP-2.1
-MIDlet-Jar-Size: ${JAR_SIZE}
-MIDlet-Jar-URL: AshaStore.jar
-EOF
+          printf "%s\n" \
+            "MIDlet-Name: AshaStore" \
+            "MIDlet-Version: 1.2" \
+            "MIDlet-Vendor: Custom" \
+            "MIDlet-1: AshaStore,,AshaStore" \
+            "MicroEdition-Configuration: CLDC-1.1" \
+            "MicroEdition-Profile: MIDP-2.1" \
+            "MIDlet-Jar-Size: ${JAR_SIZE}" \
+            "MIDlet-Jar-URL: AshaStore.jar" > AshaStore.jad
 
           echo ""
           echo "=== AshaStore.jad ==="
