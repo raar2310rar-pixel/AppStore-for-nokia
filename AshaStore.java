@@ -1,31 +1,27 @@
 import javax.microedition.midlet.MIDlet;
 import javax.microedition.lcdui.*;
+import javax.microedition.io.*;
+import java.io.*;
 
-public class AshaStore extends MIDlet implements CommandListener {
+public class AshaStore extends MIDlet implements CommandListener, Runnable {
 
     private Display display;
 
     private List mainMenuList;
     private List catalogList;
-    private Form searchForm;
     private Form detailForm;
     private Form settingsForm;
     private Form aboutForm;
-    private Form debugForm;
-
-    private TextField searchInput;
 
     private String[] itemUrls;
     private String[] itemNames;
     private int itemCount;
 
     private String selectedDownloadUrl;
-
-    private String baseUrl;
+    private String targetUrl;
 
     private Command exitCmd;
     private Command backCmd;
-    private Command executeSearchCmd;
     private Command downloadCmd;
     private Command refreshCmd;
 
@@ -38,13 +34,13 @@ public class AshaStore extends MIDlet implements CommandListener {
         }
 
         if (mainMenuList == null) {
-            baseUrl = "http://series40.kiev.ua/";
+            // URL страницы каталога
+            targetUrl = "http://series40.kiev.ua/";
 
-            itemUrls = new String[40];
-            itemNames = new String[40];
+            itemUrls = new String[50];
+            itemNames = new String[50];
 
             initCommands();
-            initSearchForm();
             initMainMenu();
         }
 
@@ -60,7 +56,6 @@ public class AshaStore extends MIDlet implements CommandListener {
     private void initCommands() {
         exitCmd = new Command("Выход", Command.EXIT, 1);
         backCmd = new Command("Назад", Command.BACK, 1);
-        executeSearchCmd = new Command("Искать", Command.OK, 1);
         downloadCmd = new Command("Скачать", Command.OK, 1);
         refreshCmd = new Command("Обновить", Command.SCREEN, 2);
     }
@@ -68,42 +63,124 @@ public class AshaStore extends MIDlet implements CommandListener {
     private void initMainMenu() {
         mainMenuList = new List("Asha Store", List.IMPLICIT);
 
-        mainMenuList.append("Каталог", null);
-        mainMenuList.append("Поиск", null);
-        mainMenuList.append("Настройки", null);
+        mainMenuList.append("Каталог (Динамический)", null);
         mainMenuList.append("О программе", null);
-        mainMenuList.append("Отладка", null);
 
         mainMenuList.addCommand(exitCmd);
         mainMenuList.setCommandListener(this);
     }
 
-    private void initSearchForm() {
-        searchForm = new Form("Поиск");
+    // Старт загрузки HTML в фоновом потоке
+    private void startCatalogLoading() {
+        Alert loadingAlert = new Alert("Загрузка", "Подключение к " + targetUrl + "...", null, AlertType.INFO);
+        loadingAlert.setTimeout(Alert.FOREVER);
+        display.setCurrent(loadingAlert);
 
-        searchInput = new TextField(
-            "Введите запрос:",
-            "",
-            50,
-            TextField.ANY
-        );
-
-        searchForm.append(searchInput);
-        searchForm.addCommand(executeSearchCmd);
-        searchForm.addCommand(backCmd);
-        searchForm.setCommandListener(this);
+        Thread thread = new Thread(this);
+        thread.start();
     }
 
-    private void initCatalog(String title) {
-        catalogList = new List(title, List.IMPLICIT);
+    // Фоновая загрузка HTML-кода и его разбор
+    public void run() {
+        HttpConnection conn = null;
+        InputStream is = null;
 
+        try {
+            conn = (HttpConnection) Connector.open(targetUrl);
+            conn.setRequestMethod(HttpConnection.GET);
+
+            if (conn.getResponseCode() == HttpConnection.HTTP_OK) {
+                is = conn.openInputStream();
+                
+                StringBuffer htmlBuffer = new StringBuffer();
+                int ch;
+                // Читаем первые 30 КБ данных, чтобы не перегрузить память телефона
+                int bytesRead = 0;
+                while ((ch = is.read()) != -1 && bytesRead < 30000) {
+                    htmlBuffer.append((char) ch);
+                    bytesRead++;
+                }
+
+                parseHtmlAndBuildCatalog(htmlBuffer.toString());
+            } else {
+                showInfo("Ошибка", "Сервер вернул код: " + conn.getResponseCode());
+            }
+        } catch (Exception e) {
+            showInfo("Ошибка сети", "Не удалось загрузить страницу.\nПроверьте подключение.");
+        } finally {
+            try {
+                if (is != null) is.close();
+                if (conn != null) conn.close();
+            } catch (Exception e) {}
+        }
+    }
+
+    // Динамический поиск тегов <a href="..."> в HTML
+    private void parseHtmlAndBuildCatalog(String html) {
+        catalogList = new List("Каталог", List.IMPLICIT);
         itemCount = 0;
 
-        addCatalogItem("Snake", baseUrl + "snake.jad");
-        addCatalogItem("Tetris", baseUrl + "tetris.jad");
-        addCatalogItem("Opera Mini", baseUrl + "opera-mini.jad");
-        addCatalogItem("UC Browser", baseUrl + "ucbrowser.jad");
-        addCatalogItem("Bluetooth Chat", baseUrl + "bluetooth-chat.jad");
+        String lowerHtml = html.toLowerCase();
+        int cursor = 0;
+
+        while (itemCount < itemNames.length) {
+            // Ищем теги ссылок <a href=
+            int hrefIndex = lowerHtml.indexOf("href=", cursor);
+            if (hrefIndex == -1) {
+                break;
+            }
+
+            int quoteStart = lowerHtml.indexOf("\"", hrefIndex);
+            if (quoteStart == -1 || quoteStart > hrefIndex + 10) {
+                cursor = hrefIndex + 5;
+                continue;
+            }
+
+            int quoteEnd = lowerHtml.indexOf("\"", quoteStart + 1);
+            if (quoteEnd == -1) {
+                cursor = hrefIndex + 5;
+                continue;
+            }
+
+            // Извлекаем URL из кавычек
+            String link = html.substring(quoteStart + 1, quoteEnd);
+
+            // Ищем закрывающий тег > и </a> для получения видимого текста ссылки
+            int tagClose = lowerHtml.indexOf(">", quoteEnd);
+            int aClose = lowerHtml.indexOf("</a>", tagClose);
+
+            String title = "";
+            if (tagClose != -1 && aClose != -1 && aClose > tagClose) {
+                title = html.substring(tagClose + 1, aClose).trim();
+            }
+
+            // Фильтруем ссылки: берем те, где есть .jad / .jar или ссылки на страницы игр
+            if (link.indexOf(".jad") != -1 || link.indexOf(".jar") != -1 || link.indexOf("game") != -1) {
+                // Если ссылка относительная, делаем её абсолютной
+                if (!link.startsWith("http://") && !link.startsWith("https://")) {
+                    if (link.startsWith("/")) {
+                        link = "http://series40.kiev.ua" + link;
+                    } else {
+                        link = "http://series40.kiev.ua/" + link;
+                    }
+                }
+
+                if (title.length() == 0) {
+                    title = "Файл #" + (itemCount + 1);
+                }
+
+                itemNames[itemCount] = title;
+                itemUrls[itemCount] = link;
+                catalogList.append(title, null);
+                itemCount++;
+            }
+
+            cursor = quoteEnd + 1;
+        }
+
+        if (itemCount == 0) {
+            catalogList.append("Записи не найдены", null);
+        }
 
         catalogList.addCommand(backCmd);
         catalogList.addCommand(refreshCmd);
@@ -112,39 +189,19 @@ public class AshaStore extends MIDlet implements CommandListener {
         display.setCurrent(catalogList);
     }
 
-    private void addCatalogItem(String name, String url) {
-        if (itemCount >= itemNames.length) {
-            return;
-        }
-
-        itemNames[itemCount] = name;
-        itemUrls[itemCount] = url;
-
-        catalogList.append(name, null);
-
-        itemCount++;
-    }
-
     private void showDetail(int index) {
         if (index < 0 || index >= itemCount) {
             return;
         }
 
-        detailForm = new Form("Приложение");
+        detailForm = new Form("Детали");
 
         detailForm.append(
             new StringItem("Название:", itemNames[index])
         );
 
         detailForm.append(
-            new StringItem(
-                "Описание:",
-                "Приложение для Nokia Asha."
-            )
-        );
-
-        detailForm.append(
-            new StringItem("JAD:", itemUrls[index])
+            new StringItem("Ссылка:", itemUrls[index])
         );
 
         selectedDownloadUrl = itemUrls[index];
@@ -156,183 +213,29 @@ public class AshaStore extends MIDlet implements CommandListener {
         display.setCurrent(detailForm);
     }
 
-    private void initSettings() {
-        settingsForm = new Form("Настройки");
-
-        settingsForm.append(
-            new StringItem("Сервер:", baseUrl)
-        );
-
-        settingsForm.append(
-            new StringItem("Версия:", "Asha Store 1.2")
-        );
-
-        settingsForm.addCommand(backCmd);
-        settingsForm.setCommandListener(this);
-
-        display.setCurrent(settingsForm);
-    }
-
-    private void initAbout() {
-        aboutForm = new Form("О программе");
-
-        aboutForm.append(
-            new StringItem(null, "Asha Store")
-        );
-
-        aboutForm.append(
-            new StringItem(
-                null,
-                "Магазин приложений для Nokia Asha."
-            )
-        );
-
-        aboutForm.append(
-            new StringItem(null, "Версия 1.2")
-        );
-
-        aboutForm.append(
-            new StringItem(null, "Java ME / Asha Platform")
-        );
-
-        aboutForm.addCommand(backCmd);
-        aboutForm.setCommandListener(this);
-
-        display.setCurrent(aboutForm);
-    }
-
-    private void initDebug() {
-        debugForm = new Form("Отладка");
-
-        debugForm.append(
-            new StringItem(
-                null,
-                "Asha Store\n\n" +
-                "Состояние: работает\n" +
-                "Сервер: " + baseUrl + "\n" +
-                "Элементов: " + itemCount
-            )
-        );
-
-        debugForm.addCommand(backCmd);
-        debugForm.setCommandListener(this);
-
-        display.setCurrent(debugForm);
-    }
-
-    private void performSearch(String query) {
-        if (query == null) {
-            return;
-        }
-
-        query = query.trim().toLowerCase();
-
-        if (query.length() == 0) {
-            showInfo(
-                "Поиск",
-                "Введите поисковый запрос."
-            );
-            return;
-        }
-
-        catalogList = new List(
-            "Результаты",
-            List.IMPLICIT
-        );
-
-        itemCount = 0;
-
-        if (query.indexOf("snake") >= 0) {
-            addCatalogItem(
-                "Snake",
-                baseUrl + "snake.jad"
-            );
-        }
-
-        if (query.indexOf("tetris") >= 0) {
-            addCatalogItem(
-                "Tetris",
-                baseUrl + "tetris.jad"
-            );
-        }
-
-        if (query.indexOf("opera") >= 0) {
-            addCatalogItem(
-                "Opera Mini",
-                baseUrl + "opera-mini.jad"
-            );
-        }
-
-        if (query.indexOf("uc") >= 0 ||
-            query.indexOf("browser") >= 0) {
-
-            addCatalogItem(
-                "UC Browser",
-                baseUrl + "ucbrowser.jad"
-            );
-        }
-
-        if (query.indexOf("bluetooth") >= 0 ||
-            query.indexOf("chat") >= 0) {
-
-            addCatalogItem(
-                "Bluetooth Chat",
-                baseUrl + "bluetooth-chat.jad"
-            );
-        }
-
-        if (itemCount == 0) {
-            catalogList.append(
-                "Ничего не найдено",
-                null
-            );
-        }
-
-        catalogList.addCommand(backCmd);
-        catalogList.setCommandListener(this);
-
-        display.setCurrent(catalogList);
-    }
-
     private void downloadSelected() {
         if (selectedDownloadUrl == null) {
-            showInfo(
-                "Ошибка",
-                "Файл не выбран."
-            );
             return;
         }
 
-        showInfo(
-            "Загрузка",
-            "Пока только адрес:\n\n" +
-            selectedDownloadUrl +
-            "\n\nЗагрузка JAR будет добавлена позже."
-        );
-    }
-
-    private void refreshCatalog() {
-        initCatalog("Каталог");
+        try {
+            // Передаём ссылку родному браузеру Nokia Asha 501
+            boolean isClosed = platformRequest(selectedDownloadUrl);
+            if (isClosed) {
+                notifyDestroyed();
+            }
+        } catch (Exception e) {
+            showInfo("Ошибка", "Не удалось запустить скачивание.");
+        }
     }
 
     private void showInfo(String title, String message) {
-        Alert alert = new Alert(
-            title,
-            message,
-            null,
-            AlertType.INFO
-        );
-
+        Alert alert = new Alert(title, message, null, AlertType.INFO);
         alert.setTimeout(Alert.FOREVER);
-
         display.setCurrent(alert);
     }
 
-    public void commandAction(
-        Command command,
-        Displayable displayable
-    ) {
-
+    public void commandAction(Command command, Displayable displayable) {
         if (command == exitCmd) {
             notifyDestroyed();
             return;
@@ -343,64 +246,39 @@ public class AshaStore extends MIDlet implements CommandListener {
             return;
         }
 
-        if (command == executeSearchCmd) {
-            performSearch(searchInput.getString());
-            return;
-        }
-
         if (command == downloadCmd) {
             downloadSelected();
             return;
         }
 
         if (command == refreshCmd) {
-            refreshCatalog();
+            startCatalogLoading();
             return;
         }
 
-        if (displayable == mainMenuList &&
-            command == List.SELECT_COMMAND) {
-
-            int selected =
-                mainMenuList.getSelectedIndex();
-
-            switch (selected) {
-
-                case 0:
-                    initCatalog("Каталог");
-                    break;
-
-                case 1:
-                    display.setCurrent(searchForm);
-                    break;
-
-                case 2:
-                    initSettings();
-                    break;
-
-                case 3:
-                    initAbout();
-                    break;
-
-                case 4:
-                    initDebug();
-                    break;
+        if (displayable == mainMenuList && command == List.SELECT_COMMAND) {
+            int selected = mainMenuList.getSelectedIndex();
+            if (selected == 0) {
+                startCatalogLoading();
+            } else if (selected == 1) {
+                showAbout();
             }
-
             return;
         }
 
-        if (displayable == catalogList &&
-            command == List.SELECT_COMMAND) {
-
-            int selected =
-                catalogList.getSelectedIndex();
-
-            if (selected >= 0 &&
-                selected < itemCount) {
-
+        if (displayable == catalogList && command == List.SELECT_COMMAND) {
+            int selected = catalogList.getSelectedIndex();
+            if (selected >= 0 && selected < itemCount) {
                 showDetail(selected);
             }
         }
+    }
+
+    private void showAbout() {
+        aboutForm = new Form("О программе");
+        aboutForm.append(new StringItem(null, "Asha Store 1.2\nДинамический парсер"));
+        aboutForm.addCommand(backCmd);
+        aboutForm.setCommandListener(this);
+        display.setCurrent(aboutForm);
     }
 }
