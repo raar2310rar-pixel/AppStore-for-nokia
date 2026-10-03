@@ -1,4 +1,4 @@
-MIDlet-1: AshaStore,, AshaStore
+MIDlet-1: AshaStore,,AshaStore
 MIDlet-Name: AshaStore
 MIDlet-Version: 1.1.1
 MIDlet-Vendor: Custom
