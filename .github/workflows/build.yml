@@ -35,10 +35,11 @@ jobs:
             exit 1
           fi
 
-      - name: Prepare local build environment
+      - name: Prepare local build environment and download J2ME API
         run: |
           mkdir -p build/classes
-          echo "Local environment ready for compilation."
+          wget https://repo1.maven.org/maven2/org/microemu/microemulator/2.0.4/microemulator-2.0.4.jar -O j2me-api.jar
+          echo "Local environment and J2ME API ready."
 
       - name: Verify source file existence
         run: |
@@ -51,7 +52,7 @@ jobs:
 
       - name: Compile AshaStore.java source code
         run: |
-          javac -source 1.6 -target 1.6 -d build/classes AshaStore.java
+          javac -source 1.6 -target 1.6 -cp j2me-api.jar -d build/classes AshaStore.java
 
       - name: Build final JAR package
         run: |
