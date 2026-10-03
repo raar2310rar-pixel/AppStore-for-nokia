@@ -39,9 +39,9 @@ jobs:
           sed -i 's/\xA0/ /g' src/*.java
           sed -i '/^[[:space:]]*java[[:space:]]*$/d' src/*.java
 
-      - name: Компиляция Java
+      - name: Компиляция Java (совместимость с Nokia S40)
         run: |
-          javac -source 1.7 -target 1.7 -cp "lib/midpapi20.jar:lib/cldcapi11.jar" -d bin src/*.java
+          javac -source 1.6 -target 1.6 -bootclasspath "lib/midpapi20.jar:lib/cldcapi11.jar" -d bin src/*.java
 
       - name: Упаковка JAR и генерация JAD
         run: |
