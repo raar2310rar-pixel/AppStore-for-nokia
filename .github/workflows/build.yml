@@ -19,12 +19,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Download MIDP and CLDC libraries
-        run: |
-          mkdir -p lib
-          curl -L --fail https://repo1.maven.org/maven2/net/sf/kxml/kxml2/2.3.0/kxml2-2.3.0.jar -o lib/cldc.jar
-          curl -L --fail https://repo1.maven.org/maven2/org/microemu/cldc/2.0.4/cldc-2.0.4.jar -o lib/midp.jar
-
       - name: Check repository structure and files
         run: |
           echo "=== Root Directory Contents ==="
@@ -57,7 +51,7 @@ jobs:
 
       - name: Compile AshaStore.java source code
         run: |
-          javac -source 1.6 -target 1.6 -cp "lib/cldc.jar:lib/midp.jar" -d build/classes AshaStore.java
+          javac -source 1.6 -target 1.6 -d build/classes AshaStore.java
 
       - name: Build final JAR package
         run: |
