@@ -13,45 +13,69 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 8
+      - name: Set up Java 8 environment
         uses: actions/setup-java@v4
         with:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Check repository structure
+      - name: Check Java compiler version
         run: |
-          echo "Checking root directory..."
+          java -version
+          javac -version
+
+      - name: Check repository structure and files
+        run: |
+          echo "=== Root Directory Contents ==="
           ls -la
-          echo "Checking META-INF directory..."
+          echo "=== Checking META-INF directory ==="
           ls -la META-INF/ || echo "META-INF directory not found"
+
+      - name: Verify Manifest file existence
+        run: |
+          if [ -f "META-INF/MANIFEST.MF" ]; then
+            echo "MANIFEST.MF found successfully."
+          else
+            echo "Error: MANIFEST.MF not found!"
+            exit 1
+          fi
 
       - name: Download Wireless Toolkit / MIDP libraries
         run: |
           mkdir -p lib
+          echo "Downloading MIDP library..."
           curl -L --fail https://repo1.maven.org/maven2/javax/microedition/lcdui/lcdui/1.0/lcdui-1.0.jar -o lib/midp.jar
+          echo "Downloading CLDC library..."
           curl -L --fail https://repo1.maven.org/maven2/net/sf/kxml/kxml2/2.3.0/kxml2-2.3.0.jar -o lib/cldc.jar
 
-      - name: Verify downloaded libraries
+      - name: Verify downloaded library files
         run: |
+          echo "=== Contents of lib folder ==="
           ls -la lib/
           file lib/cldc.jar
           file lib/midp.jar
 
-      - name: Compile AshaStore.java
+      - name: Prepare build directories
         run: |
+          rm -rf build
           mkdir -p build/classes
+
+      - name: Compile AshaStore.java source code
+        run: |
+          echo "Running javac with Java 6 target compatibility..."
           javac -source 1.6 -target 1.6 -cp "lib/cldc.jar:lib/midp.jar" -d build/classes AshaStore.java
 
-      - name: Build JAR package
+      - name: Build final JAR package
         run: |
+          echo "Packaging classes into JAR using MANIFEST.MF..."
           jar cvfm AshaStore.jar META-INF/MANIFEST.MF -C build/classes .
 
-      - name: Verify JAR contents
+      - name: Verify resulting JAR archive contents
         run: |
+          echo "=== Checking JAR internal structure ==="
           jar tf AshaStore.jar
 
-      - name: Upload Artifact
+      - name: Upload built artifact to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: AshaStore-JAR
