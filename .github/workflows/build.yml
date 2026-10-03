@@ -1,91 +1,41 @@
-name: Build AshaStore
+name: AshaStore
 
 on:
   push:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: Получить исходники
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Установить Java 8
+      - name: Set up Java 8
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
           java-version: '8'
+          distribution: 'temurin'
 
-      - name: Скачать J2ME API
+      - name: Download Wireless Toolkit / MIDP libraries
         run: |
           mkdir -p lib
-          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" -o lib/midpapi20.jar
-          curl -fsSL -A "Mozilla/5.0" "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" -o lib/cldcapi11.jar
+          curl -sL https://raw.githubusercontent.com/microemu/microemu/master/microemu-midp/src/main/resources/org/microemu/cldc-1.1.jar -o lib/cldc.jar
+          curl -sL https://raw.githubusercontent.com/microemu/microemu/master/microemu-midp/src/main/resources/org/microemu/midp-2.0.jar -o lib/midp.jar
 
-      - name: Подготовить структуру
+      - name: Compile AshaStore.java
         run: |
-          mkdir -p bin dist src
-          find . -maxdepth 2 -name "AshaStore.java" -exec cp {} src/ \;
+          mkdir -p build/classes
+          javac -source 1.6 -target 1.6 -cp "lib/cldc.jar:lib/midp.jar" -d build/classes AshaStore.java
 
-      - name: Очистить код от разметки
+      - name: Build JAR package
         run: |
-          sed -i 's/```java//gI' src/*.java
-          sed -i 's/```//g' src/*.java
-          sed -i 's/`//g' src/*.java
-          sed -i 's/\xA0/ /g' src/*.java
-          sed -i '/^[[:space:]]*java[[:space:]]*$/d' src/*.java
+          jar cvfm AshaStore.jar META-INF/MANIFEST.MF -C build/classes .
 
-      - name: Компиляция Java (MIDP 2.1 / CLDC 1.1)
-        run: |
-          javac -source 1.4 -target 1.4 -Xlint:-options -cp "lib/midpapi20.jar:lib/cldcapi11.jar" -d bin src/*.java
-
-      - name: Упаковка JAR и генерация JAD
-        run: |
-          mkdir -p bin/META-INF
-          {
-            echo "Manifest-Version: 1.0"
-            echo "MIDlet-1: Asha Store,,AshaStore"
-            echo "MIDlet-Name: Asha Store"
-            echo "MIDlet-Vendor: Asha Store"
-            echo "MIDlet-Version: 1.0.0"
-            echo "MicroEdition-Configuration: CLDC-1.1"
-            echo "MicroEdition-Profile: MIDP-2.1"
-          } > bin/META-INF/MANIFEST.MF
-          
-          jar cfm dist/AshaStore.jar bin/META-INF/MANIFEST.MF -C bin .
-          
-          JAR_SIZE=$(stat -c%s dist/AshaStore.jar)
-          {
-            echo "MIDlet-1: Asha Store,,AshaStore"
-            echo "MIDlet-Name: Asha Store"
-            echo "MIDlet-Vendor: Asha Store"
-            echo "MIDlet-Version: 1.0.0"
-            echo "MicroEdition-Configuration: CLDC-1.1"
-            echo "MicroEdition-Profile: MIDP-2.1"
-            echo "MIDlet-Jar-URL: AshaStore.jar"
-            echo "MIDlet-Jar-Size: $JAR_SIZE"
-          } > dist/AshaStore.jad
-
-      - name: Выгрузить файлы в артефакты (внизу страницы Summary)
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AshaStore-build
-          path: |
-            dist/AshaStore.jar
-            dist/AshaStore.jad
-
-      - name: Опубликовать релиз
-        uses: softprops/action-gh-release@v1
-        continue-on-error: true
-        with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: "Asha Store v1.0.${{ github.run_number }}"
-          files: |
-            dist/AshaStore.jar
-            dist/AshaStore.jad
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: AshaStore-JAR
+          path: AshaStore.jar
