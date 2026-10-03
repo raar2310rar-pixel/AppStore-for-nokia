@@ -1,3 +1,4 @@
+```yaml
 name: AshaStore
 
 on:
@@ -5,6 +6,7 @@ on:
     branches:
       - main
       - master
+
   workflow_dispatch:
 
 jobs:
@@ -12,27 +14,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+
+      # --------------------------------------------------
+      # 1. Получаем исходники
+      # --------------------------------------------------
+
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 8 environment
+
+      # --------------------------------------------------
+      # 2. Java
+      # --------------------------------------------------
+
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Install tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y dos2unix wget
 
-      - name: Check project files
+      # --------------------------------------------------
+      # 3. Проверяем проект
+      # --------------------------------------------------
+
+      - name: Check project
         run: |
-          echo "=== Project files ==="
+          echo "=== Project ==="
+
           find . -maxdepth 3 -type f -print
 
           echo ""
-          echo "=== Checking required files ==="
 
           if [ ! -f "AshaStore.java" ]; then
             echo "ERROR: AshaStore.java not found!"
@@ -45,57 +57,124 @@ jobs:
           fi
 
           echo "AshaStore.java: OK"
-          echo "META-INF/MANIFEST.MF: OK"
+          echo "MANIFEST.MF: OK"
 
-      - name: Fix line endings
-        run: |
-          dos2unix AshaStore.java
-          dos2unix META-INF/MANIFEST.MF
 
-      - name: Show MANIFEST.MF
+      # --------------------------------------------------
+      # 4. Скачиваем Java ME API автоматически
+      # --------------------------------------------------
+
+      - name: Download Java ME APIs
         run: |
-          echo "=== MANIFEST.MF ==="
-          cat META-INF/MANIFEST.MF
+          mkdir -p tools/lib
+
+          echo "Downloading CLDC 1.1 API..."
+
+          wget -q \
+            https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar \
+            -O tools/lib/cldcapi11.jar
+
+          echo "Downloading MIDP API..."
+
+          wget -q \
+            https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar \
+            -O tools/lib/midpapi20.jar
+
           echo ""
+          echo "Downloaded libraries:"
 
-      - name: Prepare build directory
+          ls -lh tools/lib/
+
+
+      # --------------------------------------------------
+      # 5. Проверяем API
+      # --------------------------------------------------
+
+      - name: Verify Java ME APIs
         run: |
+          test -s tools/lib/cldcapi11.jar
+          test -s tools/lib/midpapi20.jar
+
+          echo "CLDC API OK"
+          echo "MIDP API OK"
+
+
+      # --------------------------------------------------
+      # 6. Получаем preverify
+      # --------------------------------------------------
+
+      - name: Download preverify
+        run: |
+          mkdir -p tools/preverify
+
+          echo "Downloading Java ME preverifier..."
+
+          wget -q \
+            https://github.com/SodalisRetro/j2me-tools/releases/download/v1.0/preverify-linux \
+            -O tools/preverify/preverify
+
+          chmod +x tools/preverify/preverify
+
+          echo "Preverify:"
+          tools/preverify/preverify -help || true
+
+
+      # --------------------------------------------------
+      # 7. Подготовка
+      # --------------------------------------------------
+
+      - name: Prepare build
+        run: |
+          rm -rf build
+
+          mkdir -p build/tmpclasses
           mkdir -p build/classes
+
           rm -f AshaStore.jar
           rm -f AshaStore.jad
 
-      - name: Download J2ME API
+
+      # --------------------------------------------------
+      # 8. Компиляция Java ME
+      # --------------------------------------------------
+
+      - name: Compile MIDlet
         run: |
-          wget -q \
-            https://repo1.maven.org/maven2/org/microemu/microemulator/2.0.4/microemulator-2.0.4.jar \
-            -O j2me-api.jar
-
-          if [ ! -s "j2me-api.jar" ]; then
-            echo "ERROR: Failed to download J2ME API"
-            exit 1
-          fi
-
-          echo "J2ME API downloaded:"
-          ls -lh j2me-api.jar
-
-      - name: Compile AshaStore.java
-        run: |
-          echo "=== Compiling AshaStore.java ==="
+          echo "=== Compiling AshaStore ==="
 
           javac \
-            -source 1.4 \
-            -target 1.4 \
-            -cp j2me-api.jar \
-            -d build/classes \
+            -source 1.3 \
+            -target 1.1 \
+            -bootclasspath \
+            tools/lib/cldcapi11.jar:tools/lib/midpapi20.jar \
+            -d build/tmpclasses \
             AshaStore.java
 
           echo ""
           echo "Compilation successful."
 
-      - name: Show compiled classes
+
+      # --------------------------------------------------
+      # 9. Preverification
+      # --------------------------------------------------
+
+      - name: Preverify MIDlet
         run: |
-          echo "=== Compiled classes ==="
-          find build/classes -type f -print
+          echo "=== Preverification ==="
+
+          tools/preverify/preverify \
+            -classpath \
+            tools/lib/cldcapi11.jar:tools/lib/midpapi20.jar \
+            -d build/classes \
+            build/tmpclasses
+
+          echo ""
+          echo "Preverification successful."
+
+
+      # --------------------------------------------------
+      # 10. Создаём JAR
+      # --------------------------------------------------
 
       - name: Build JAR
         run: |
@@ -107,7 +186,7 @@ jobs:
             -C build/classes .
 
           if [ ! -f "AshaStore.jar" ]; then
-            echo "ERROR: AshaStore.jar was not created!"
+            echo "ERROR: JAR was not created!"
             exit 1
           fi
 
@@ -115,43 +194,73 @@ jobs:
           echo "JAR created successfully:"
           ls -lh AshaStore.jar
 
+
+      # --------------------------------------------------
+      # 11. Создаём правильный JAD
+      # --------------------------------------------------
+
       - name: Generate JAD
         run: |
           echo "=== Generating AshaStore.jad ==="
 
           JAR_SIZE=$(stat -c%s AshaStore.jar)
 
-          cp META-INF/MANIFEST.MF AshaStore.jad
-
-          echo "MIDlet-Jar-Size: $JAR_SIZE" >> AshaStore.jad
-          echo "MIDlet-Jar-URL: AshaStore.jar" >> AshaStore.jad
-
-          echo "" >> AshaStore.jad
-
-          dos2unix AshaStore.jad
+          cat > AshaStore.jad <<EOF
+          MIDlet-Name: AshaStore
+          MIDlet-Version: 1.2
+          MIDlet-Vendor: Custom
+          MIDlet-1: AshaStore,,AshaStore
+          MicroEdition-Configuration: CLDC-1.1
+          MicroEdition-Profile: MIDP-2.1
+          MIDlet-Jar-Size: ${JAR_SIZE}
+          MIDlet-Jar-URL: AshaStore.jar
+          EOF
 
           echo ""
           echo "=== AshaStore.jad ==="
+
           cat AshaStore.jad
 
-      - name: Verify JAR and JAD
+
+      # --------------------------------------------------
+      # 12. Проверка JAR
+      # --------------------------------------------------
+
+      - name: Verify JAR
         run: |
-          echo "=== Verifying files ==="
-
-          test -f AshaStore.jar
-          test -f AshaStore.jad
-
-          echo ""
-          echo "JAR:"
-          ls -lh AshaStore.jar
-
-          echo ""
-          echo "JAD:"
-          ls -lh AshaStore.jad
-
-          echo ""
           echo "=== JAR contents ==="
+
           jar tf AshaStore.jar
+
+          echo ""
+
+          if ! jar tf AshaStore.jar | grep -q "^AshaStore.class$"; then
+            echo "ERROR: AshaStore.class not found!"
+            exit 1
+          fi
+
+          echo "AshaStore.class: OK"
+
+
+      # --------------------------------------------------
+      # 13. Проверка JAD
+      # --------------------------------------------------
+
+      - name: Verify JAD
+        run: |
+          grep "MIDlet-Name:" AshaStore.jad
+          grep "MIDlet-Version:" AshaStore.jad
+          grep "MIDlet-Vendor:" AshaStore.jad
+          grep "MIDlet-Jar-Size:" AshaStore.jad
+          grep "MIDlet-Jar-URL:" AshaStore.jad
+
+          echo ""
+          echo "JAD verification successful."
+
+
+      # --------------------------------------------------
+      # 14. Загружаем готовые файлы
+      # --------------------------------------------------
 
       - name: Upload AshaStore package
         uses: actions/upload-artifact@v4
@@ -161,3 +270,4 @@ jobs:
             AshaStore.jar
             AshaStore.jad
           if-no-files-found: error
+```
