@@ -1,4 +1,4 @@
-name: AshaStore
+name: AshaStore Build
 
 on:
   push:
@@ -19,11 +19,24 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
 
+      - name: Check repository structure
+        run: |
+          echo "Checking root directory..."
+          ls -la
+          echo "Checking META-INF directory..."
+          ls -la META-INF/ || echo "META-INF directory not found"
+
       - name: Download Wireless Toolkit / MIDP libraries
         run: |
           mkdir -p lib
-          curl -sL https://raw.githubusercontent.com/microemu/microemu/master/microemu-midp/src/main/resources/org/microemu/cldc-1.1.jar -o lib/cldc.jar
-          curl -sL https://raw.githubusercontent.com/microemu/microemu/master/microemu-midp/src/main/resources/org/microemu/midp-2.0.jar -o lib/midp.jar
+          curl -L --fail https://repo1.maven.org/maven2/javax/microedition/lcdui/lcdui/1.0/lcdui-1.0.jar -o lib/midp.jar
+          curl -L --fail https://repo1.maven.org/maven2/net/sf/kxml/kxml2/2.3.0/kxml2-2.3.0.jar -o lib/cldc.jar
+
+      - name: Verify downloaded libraries
+        run: |
+          ls -la lib/
+          file lib/cldc.jar
+          file lib/midp.jar
 
       - name: Compile AshaStore.java
         run: |
@@ -33,6 +46,10 @@ jobs:
       - name: Build JAR package
         run: |
           jar cvfm AshaStore.jar META-INF/MANIFEST.MF -C build/classes .
+
+      - name: Verify JAR contents
+        run: |
+          jar tf AshaStore.jar
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
