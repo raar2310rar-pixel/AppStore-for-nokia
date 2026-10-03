@@ -1,4 +1,4 @@
-name: AshaStore Build
+name: AshaStore
 
 on:
   push:
@@ -40,39 +40,30 @@ jobs:
             exit 1
           fi
 
-      - name: Download Wireless Toolkit / MIDP libraries
+      - name: Prepare local build environment
         run: |
-          mkdir -p lib
-          echo "Downloading MIDP library..."
-          curl -L --fail https://repo1.maven.org/maven2/javax/microedition/lcdui/lcdui/1.0/lcdui-1.0.jar -o lib/midp.jar
-          echo "Downloading CLDC library..."
-          curl -L --fail https://repo1.maven.org/maven2/net/sf/kxml/kxml2/2.3.0/kxml2-2.3.0.jar -o lib/cldc.jar
-
-      - name: Verify downloaded library files
-        run: |
-          echo "=== Contents of lib folder ==="
-          ls -la lib/
-          file lib/cldc.jar
-          file lib/midp.jar
-
-      - name: Prepare build directories
-        run: |
-          rm -rf build
           mkdir -p build/classes
+          echo "Local environment ready for compilation."
+
+      - name: Verify source file existence
+        run: |
+          if [ -f "AshaStore.java" ]; then
+            echo "AshaStore.java found."
+          else
+            echo "Error: AshaStore.java not found in root!"
+            exit 1
+          fi
 
       - name: Compile AshaStore.java source code
         run: |
-          echo "Running javac with Java 6 target compatibility..."
-          javac -source 1.6 -target 1.6 -cp "lib/cldc.jar:lib/midp.jar" -d build/classes AshaStore.java
+          javac -source 1.6 -target 1.6 -d build/classes AshaStore.java
 
       - name: Build final JAR package
         run: |
-          echo "Packaging classes into JAR using MANIFEST.MF..."
           jar cvfm AshaStore.jar META-INF/MANIFEST.MF -C build/classes .
 
       - name: Verify resulting JAR archive contents
         run: |
-          echo "=== Checking JAR internal structure ==="
           jar tf AshaStore.jar
 
       - name: Upload built artifact to GitHub
