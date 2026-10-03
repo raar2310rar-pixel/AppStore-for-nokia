@@ -410,7 +410,7 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
             executeSearch();
         } else if (c == downloadCmd && d == detailForm) {
             startDownload();
-        } else if (d == mainMenuList && c == List.SELECT_COMMAND) {
+        } else if (d == mainMenuList) {
             int selected = mainMenuList.getSelectedIndex();
             switch (selected) {
                 case 0:
@@ -438,9 +438,11 @@ public class AshaStore extends MIDlet implements CommandListener, Runnable {
                     display.setCurrent(debugForm);
                     break;
             }
-        } else if (d == catalogList && c == List.SELECT_COMMAND) {
+        } else if (d == catalogList) {
             int selected = catalogList.getSelectedIndex();
-            openAppDetails(selected);
+            if (selected >= 0) {
+                openAppDetails(selected);
+            }
         }
     }
 }
