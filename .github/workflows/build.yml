@@ -142,8 +142,8 @@ jobs:
           echo "=== Compiling AshaStore ==="
 
           javac \
-            -source 1.3 \
-            -target 1.1 \
+            -source 1.6 \
+            -target 1.6 \
             -bootclasspath \
             tools/lib/cldcapi11.jar:tools/lib/midpapi20.jar \
             -d build/tmpclasses \
@@ -205,15 +205,15 @@ jobs:
           JAR_SIZE=$(stat -c%s AshaStore.jar)
 
           cat > AshaStore.jad <<EOF
-          MIDlet-Name: AshaStore
-          MIDlet-Version: 1.2
-          MIDlet-Vendor: Custom
-          MIDlet-1: AshaStore,,AshaStore
-          MicroEdition-Configuration: CLDC-1.1
-          MicroEdition-Profile: MIDP-2.1
-          MIDlet-Jar-Size: ${JAR_SIZE}
-          MIDlet-Jar-URL: AshaStore.jar
-          EOF
+MIDlet-Name: AshaStore
+MIDlet-Version: 1.2
+MIDlet-Vendor: Custom
+MIDlet-1: AshaStore,,AshaStore
+MicroEdition-Configuration: CLDC-1.1
+MicroEdition-Profile: MIDP-2.1
+MIDlet-Jar-Size: ${JAR_SIZE}
+MIDlet-Jar-URL: AshaStore.jar
+EOF
 
           echo ""
           echo "=== AshaStore.jad ==="
@@ -269,4 +269,3 @@ jobs:
             AshaStore.jar
             AshaStore.jad
           if-no-files-found: error
-```
